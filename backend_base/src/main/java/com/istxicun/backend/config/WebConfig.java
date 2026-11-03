@@ -28,7 +28,8 @@ public class WebConfig implements WebMvcConfigurer {
     registry
         .addInterceptor(new SaInterceptor(handler -> StpUtil.checkLogin()))
         .addPathPatterns("/api/**")
-        .excludePathPatterns("/api/public/**");
+        .excludePathPatterns("/api/public/**")
+        .order(0);
   }
 
   @Bean
@@ -36,8 +37,9 @@ public class WebConfig implements WebMvcConfigurer {
     var cors = new CorsConfiguration();
     cors.setAllowedOrigins(Arrays.asList(allowedOrigins));
     cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-    cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id"));
-    cors.setExposedHeaders(List.of("X-Request-Id"));
+    cors.setAllowedHeaders(
+        List.of("Authorization", "Content-Type", "X-Request-Id", "Idempotency-Key"));
+    cors.setExposedHeaders(List.of("X-Request-Id", "Retry-After"));
     cors.setAllowCredentials(false);
     cors.setMaxAge(3600L);
     var source = new UrlBasedCorsConfigurationSource();

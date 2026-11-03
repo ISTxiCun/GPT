@@ -4,6 +4,7 @@ import cn.dev33.satoken.exception.NotLoginException;
 import cn.dev33.satoken.exception.NotPermissionException;
 import cn.dev33.satoken.exception.NotRoleException;
 import com.istxicun.backend.common.api.ApiResponse;
+import com.istxicun.backend.distributed.DistributedException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,16 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
   private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+  @ExceptionHandler(DistributedException.class)
+  ResponseEntity<ApiResponse<Void>> distributed(DistributedException ex) {
+    if (ex.getStatus().is5xxServerError())
+      log.error("Distributed infrastructure failure: {}", ex.getCode(), ex);
+    var response = ResponseEntity.status(ex.getStatus());
+    if (ex.getRetryAfter() != null)
+      response.header("Retry-After", Long.toString(ex.getRetryAfter()));
+    return response.body(ApiResponse.error(ex.getCode(), ex.getMessage()));
+  }
 
   @ExceptionHandler(NotLoginException.class)
   ResponseEntity<ApiResponse<Void>> unauthenticated(NotLoginException ex) {

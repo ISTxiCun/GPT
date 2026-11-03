@@ -2,7 +2,9 @@
 
 基于 **JDK 17 / Spring Boot 3.5.9 / MyBatis-Plus / MySQL / Redis / Sa-Token** 的通用后端脚手架。单 Maven 模块、一个启动入口，业务按包模块化。项目根目录就是 `backend_base`。
 
-提供 Web、数据库、认证框架与开发环境基础配置。**不包含登录接口、账号表、用户管理、角色管理或电商业务**，也没有默认账号、演示 Token、业务数据库表。启动成功后，业务接口为空是正常现象。
+提供 Web、数据库、认证框架与开发环境基础配置，以及默认关闭、按需启用的分布式锁、限流、防重复提交能力。**不包含登录接口、账号表、用户管理、角色管理或电商业务**，也没有默认账号、演示 Token、业务数据库表。启动成功后，业务接口为空是正常现象。
+
+详细分布式能力说明、调用示例、双实例演示和真实 Redis 测试见 **[分布式基础能力 V1](docs/distributed.md)**。
 
 ## 1. 环境准备
 
@@ -101,11 +103,13 @@ backend_base/
 │   ├── BackendApplication.java
 │   ├── common/                  # 响应、分页、异常
 │   ├── config/                  # Web、认证、Redis、MP、文档、请求 ID
+│   ├── distributed/             # 可选锁、限流、防重复提交
 │   └── modules/                 # 后续业务模块
 ├── src/main/resources/
 │   ├── application.yml
 │   ├── application-dev.yml
 │   └── db/migration/            # Flyway SQL
+├── src/demo/                    # 独立 profile 编译的演示代码
 ├── src/test/
 ├── compose.yaml
 └── Dockerfile
@@ -220,7 +224,9 @@ java -jar target/backend-base-0.0.1-SNAPSHOT.jar
 
 测试使用仅测试范围的 H2，不需要本地 MySQL/Redis；覆盖应用上下文启动、未登录拦截、公开接口、参数校验、CORS 预检与拒绝、错误响应及默认文档关闭。测试 Controller 只存在于 `src/test`，不会打进生产包。
 
-这些测试不替代真实 MySQL/Redis 验证；新增业务后应补充真实数据库、迁移和 Sa-Token 登录/退出/权限测试。H2 不保证 MySQL 特有 SQL 兼容。
+配置测试还覆盖功能默认关闭、环境必填、注解误用拒绝启动与可信代理解析。`mvn -Predis-it clean verify` 可运行真实 Redis 集成测试，详见 [分布式文档](docs/distributed.md#6-真实-redis-集成测试)。
+
+基础测试不替代真实 MySQL/Redis 验证；新增业务后应补充真实数据库、迁移和 Sa-Token 登录/退出/权限测试。H2 不保证 MySQL 特有 SQL 兼容。
 
 ## 10. Docker 运行应用
 
@@ -255,4 +261,4 @@ docker run --rm --name backend-base-app \
 
 可以从单体开始增加业务模块，再部署多个实例；所有实例使用同一套 Sa-Token 配置和 Redis，数据库由部署方案统一管理。不要依赖本机内存保存需要共享的状态。
 
-分布式锁、限流、缓存策略、消息队列、幂等、对象存储、定时任务与服务拆分由项目按需实现。脚手架保留接入位置，不承诺开箱即用的分布式业务正确性。
+已提供可选分布式锁、固定窗口限流、短窗口防重复提交，具体使用及限制见 [分布式基础能力 V1](docs/distributed.md)。缓存一致性、消息队列、持久业务幂等、对象存储、定时任务与服务拆分仍由项目按需实现。公共能力不替代业务约束，也不承诺分布式业务正确性。

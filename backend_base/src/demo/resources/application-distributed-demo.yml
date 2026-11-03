@@ -1,0 +1,17 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+app:
+  distributed:
+    environment: ${APP_ENV:demo}
+    lock:
+      enabled: true
+    rate-limit:
+      enabled: true
+    submission:
+      enabled: true
+demo:
+  instance-id: ${INSTANCE_ID:local-demo}
+  access-key: ${DEMO_ACCESS_KEY}

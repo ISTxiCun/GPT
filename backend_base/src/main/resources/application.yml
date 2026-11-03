@@ -68,6 +68,17 @@ springdoc:
   swagger-ui:
     enabled: false
 app:
+  distributed:
+    namespace: ${spring.application.name}
+    environment: ${APP_ENV:}
+    lock:
+      enabled: false
+      watchdog-millis: 30000
+    rate-limit:
+      enabled: false
+    submission:
+      enabled: false
+    trusted-proxies: []
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
 logging:

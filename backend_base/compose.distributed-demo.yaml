@@ -1,0 +1,50 @@
+# Standalone Redis-only demo; production datasource configuration is unchanged.
+name: backend-base-demo
+x-demo-app: &demo-app
+  image: eclipse-temurin:17-jre-alpine
+  user: "10001:10001"
+  volumes:
+    - ./target-demo/backend-base-demo.jar:/app.jar:ro
+  command: ["java", "-jar", "/app.jar"]
+  environment: &demo-env
+    REDIS_HOST: redis
+    REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    APP_ENV: ${APP_ENV:-demo}
+    DEMO_ACCESS_KEY: ${DEMO_ACCESS_KEY:?Set DEMO_ACCESS_KEY}
+  depends_on:
+    redis:
+      condition: service_healthy
+services:
+  redis:
+    image: redis:7.4-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    command: ["sh", "-c", 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    volumes:
+      - demo-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  app-a:
+    <<: *demo-app
+    environment:
+      <<: *demo-env
+      INSTANCE_ID: a
+  app-b:
+    <<: *demo-app
+    environment:
+      <<: *demo-env
+      INSTANCE_ID: b
+  nginx:
+    image: nginx:1.28-alpine
+    ports:
+      - "127.0.0.1:8090:80"
+    volumes:
+      - ./demo/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app-a
+      - app-b
+volumes:
+  demo-redis-data:

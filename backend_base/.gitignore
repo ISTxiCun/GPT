@@ -6,3 +6,6 @@
 .env.*
 !.env.example
 *.log
+
+/target-demo/
+__pycache__/

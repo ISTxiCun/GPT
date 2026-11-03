@@ -93,7 +93,7 @@ class FoundationIntegrationTest {
             options("/api/probe")
                 .header("Origin", "http://localhost:5173")
                 .header("Access-Control-Request-Method", "GET")
-                .header("Access-Control-Request-Headers", "Authorization"))
+                .header("Access-Control-Request-Headers", "Authorization, Idempotency-Key"))
         .andExpect(status().isOk())
         .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
     mvc.perform(
@@ -109,6 +109,11 @@ class FoundationIntegrationTest {
         .andExpect(status().isInternalServerError())
         .andExpect(jsonPath("$.message").value("服务暂时不可用"));
     mvc.perform(get("/not-found")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void demoEndpointsNotRegisteredInDefaultApplication() throws Exception {
+    mvc.perform(post("/api/public/demo/login")).andExpect(status().isNotFound());
   }
 
   @Test
