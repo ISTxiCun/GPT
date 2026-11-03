@@ -1,6 +1,6 @@
 package com.istxicun.backend.distributed.key;
 
-import com.istxicun.backend.distributed.DistributedProperties;
+import com.istxicun.backend.common.identity.ApplicationIdentity;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -10,8 +10,8 @@ import java.util.Objects;
 public final class RedisKeyFactory {
   private final String prefix;
 
-  public RedisKeyFactory(DistributedProperties properties) {
-    prefix = properties.namespace() + ":" + properties.environment() + ":dist:";
+  public RedisKeyFactory(ApplicationIdentity identity) {
+    prefix = identity.prefix("dist");
   }
 
   public String key(String feature, String... parts) {

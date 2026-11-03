@@ -2,9 +2,8 @@ package com.istxicun.backend.config;
 
 import cn.dev33.satoken.interceptor.SaInterceptor;
 import cn.dev33.satoken.stp.StpUtil;
-import java.util.Arrays;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,11 +15,12 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
+@EnableConfigurationProperties(CorsProperties.class)
 public class WebConfig implements WebMvcConfigurer {
-  private final String[] allowedOrigins;
+  private final CorsProperties properties;
 
-  public WebConfig(@Value("${app.cors.allowed-origins:}") String[] allowedOrigins) {
-    this.allowedOrigins = allowedOrigins;
+  public WebConfig(CorsProperties properties) {
+    this.properties = properties;
   }
 
   @Override
@@ -35,13 +35,12 @@ public class WebConfig implements WebMvcConfigurer {
   @Bean
   FilterRegistrationBean<CorsFilter> corsFilter() {
     var cors = new CorsConfiguration();
-    cors.setAllowedOrigins(Arrays.asList(allowedOrigins));
+    cors.setAllowedOrigins(properties.allowedOrigins());
     cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-    cors.setAllowedHeaders(
-        List.of("Authorization", "Content-Type", "X-Request-Id", "Idempotency-Key"));
-    cors.setExposedHeaders(List.of("X-Request-Id", "Retry-After"));
+    cors.setAllowedHeaders(properties.effectiveAllowedHeaders());
+    cors.setExposedHeaders(properties.effectiveExposedHeaders());
     cors.setAllowCredentials(false);
-    cors.setMaxAge(3600L);
+    cors.setMaxAge(properties.maxAgeSeconds());
     var source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/api/**", cors);
     var registration = new FilterRegistrationBean<>(new CorsFilter(source));

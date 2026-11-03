@@ -1,5 +1,6 @@
 package com.istxicun.backend.distributed.ratelimit;
 
+import com.istxicun.backend.common.exception.FailureCategory;
 import com.istxicun.backend.distributed.DistributedException;
 import com.istxicun.backend.distributed.key.RedisKeyFactory;
 import java.util.List;
@@ -9,7 +10,6 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.http.HttpStatus;
 
 public final class RedisRateLimiter {
   private static final Logger log = LoggerFactory.getLogger(RedisRateLimiter.class);
@@ -59,7 +59,7 @@ public final class RedisRateLimiter {
           new IllegalStateException("Invalid rate limit script response"));
     if (((Number) result.get(0)).longValue() == 0)
       throw new DistributedException(
-          HttpStatus.TOO_MANY_REQUESTS,
+          FailureCategory.RATE_LIMITED,
           "RATE_LIMITED",
           "请求过于频繁",
           Math.max(1, ((Number) result.get(1)).longValue()),

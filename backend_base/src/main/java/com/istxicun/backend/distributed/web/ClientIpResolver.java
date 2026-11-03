@@ -1,5 +1,6 @@
 package com.istxicun.backend.distributed.web;
 
+import com.istxicun.backend.common.exception.FailureCategory;
 import com.istxicun.backend.distributed.DistributedException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.InetAddress;
@@ -8,7 +9,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.springframework.http.HttpStatus;
 
 /** Exact-IP proxy allowlist. No DNS lookups or implicit trust of forwarded headers. */
 public final class ClientIpResolver {
@@ -37,7 +37,8 @@ public final class ClientIpResolver {
   }
 
   private static DistributedException invalid() {
-    return new DistributedException(HttpStatus.BAD_REQUEST, "INVALID_FORWARDED_FOR", "代理地址格式不合法");
+    return new DistributedException(
+        FailureCategory.INVALID_ARGUMENT, "INVALID_FORWARDED_FOR", "代理地址格式不合法");
   }
 
   private static String normalize(String input) {

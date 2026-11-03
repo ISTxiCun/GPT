@@ -41,7 +41,10 @@
 - [分布式详细说明](docs/distributed.md)：算法、异常、事务顺序、代理 IP 和使用限制。
 - [后续开发路线图](docs/distributed-roadmap.md)：V2 缓存、V3 异步处理、V4 运行观测的实现计划（尚未实现）。
 - [快速生成模块规划](docs/module-generator.md)：18 类可选业务模板、功能勾选与生成流程设计（尚未实现）。
+- [架构保护与迁移](docs/architecture-guardrails.md)：会话隔离、错误分层、跨域扩展和自动回归规则。
 - [脚手架文档导航](docs/README.md)：当前功能与未来计划的统一入口。
+
+**升级提示：** 会话存储现在按应用/环境统一隔离，原无前缀 Token 需要重新登录；原 `app.distributed.namespace/environment` 配置迁至 `app.identity`。迁移步骤见[架构保护与配置迁移](docs/architecture-guardrails.md#配置与会话迁移)。
 
 ## 1. 环境准备
 
@@ -125,7 +128,10 @@ curl -i http://127.0.0.1:8081/actuator/health
 | `SERVER_PORT` | `8080` |
 | `MANAGEMENT_PORT` | `8081` |
 | `MANAGEMENT_ADDRESS` | `127.0.0.1` |
-| `APP_ENV` | 普通启动可不设；开启任一分布式能力后必填，如 `local`、`test`、`prod` |
+| `APP_NAMESPACE` | 默认 Spring 应用名；不同项目使用不同值，同项目各实例保持一致 |
+| `APP_ENV` | 普通启动必填；dev/demo profile 分别默认 local/demo，生产必须显式设置 |
+| `CORS_ALLOWED_HEADERS` | 逗号分隔的额外请求头，自动保留认证、防重等基础头 |
+| `CORS_EXPOSED_HEADERS` | 逗号分隔的额外可见响应头，自动保留请求 ID 和 Retry-After |
 | `CORS_ALLOWED_ORIGINS` | dev 为 `http://localhost:5173`；其他环境为空，逗号分隔多个完整来源 |
 
 `.env` 的 `MYSQL_ROOT_PASSWORD` 仅用于初始化 MySQL 容器，应用不使用 root 账号。生产环境使用独立凭据和外部配置；按数据库/Redis 服务要求配置 TLS。不要启用 dev profile，接口文档默认关闭。管理端口若调整为对外监听，需要网络隔离与访问控制。
@@ -220,7 +226,7 @@ String token = StpUtil.getTokenValue(); // 返回原始 Token，Vue 自行添加
 
 ## 8. Vue 对接
 
-建议开发环境通过 Vite 代理 `/api` 到 `http://localhost:8080`；也可直接请求后端并配置 CORS。来源必须匹配协议、主机、端口，`127.0.0.1` 与 `localhost` 是不同来源。
+建议开发环境通过 Vite 代理 `/api` 到 `http://localhost:8080`；也可直接请求后端并配置 CORS。来源必须匹配协议、主机、端口，`127.0.0.1` 与 `localhost` 是不同来源。业务自定义请求头通过 `CORS_ALLOWED_HEADERS` 扩展，可见响应头通过 `CORS_EXPOSED_HEADERS` 扩展，无需修改公共代码；完整 YAML 示例见[架构保护文档](docs/architecture-guardrails.md#3-可扩展-cors)。
 
 Axios 示例（假设 tokenStore 是你的登录状态存储）：
 
@@ -268,6 +274,8 @@ java -jar target/backend-base-0.0.1-SNAPSHOT.jar
 
 配置测试还覆盖功能默认关闭、环境必填、注解误用拒绝启动与可信代理解析。`mvn -Predis-it clean verify` 可运行真实 Redis 集成测试，详见 [分布式文档](docs/distributed.md#6-真实-redis-集成测试)。
 
+默认测试还包含架构边界、会话配置保护、CORS 扩展与 HTTP 错误映射检查。真实 Redis 测试使用独立 JVM 验证共享会话及跨项目/环境隔离；GitHub Actions 自动执行这些回归规则。
+
 基础测试不替代真实 MySQL/Redis 验证；新增业务后应补充真实数据库、迁移和 Sa-Token 登录/退出/权限测试。H2 不保证 MySQL 特有 SQL 兼容。
 
 ## 10. Docker 运行应用
@@ -303,8 +311,10 @@ V1 将跨实例协作所需的公共机制集中在 `com.istxicun.backend.distri
 
 ```yaml
 app:
-  distributed:
+  identity:
+    namespace: ${APP_NAMESPACE:${spring.application.name}}
     environment: ${APP_ENV:}
+  distributed:
     lock:
       enabled: true
     rate-limit:
@@ -315,7 +325,7 @@ app:
 
 启动前设置 `APP_ENV=local`；PowerShell 使用 `$env:APP_ENV = 'local'`，IDE 则加入运行环境变量。上面的三个开关可以分别开启，未配置时全部关闭。连接继续使用第 4 节的 Redis 配置，V1 锁适配器支持 standalone Redis。
 
-同一部署的多个实例使用相同的应用名、APP_ENV、Redis 配置；不同项目或环境必须隔离。接口用了注解却没有开启对应功能，启动时会明确报错，避免保护静默失效。
+会话与分布式组件统一使用 `app.identity`。同一部署的多个实例使用相同的 namespace、APP_ENV 和 Redis 配置；不同项目/环境使用不同标识。接口用了注解却没有开启对应功能，启动时会明确报错，避免保护静默失效。
 
 ### 11.2 在业务模块中调用锁
 
@@ -419,6 +429,7 @@ mvn -Predis-it clean verify
 
 ## 13. 常见问题
 
+- **环境或旧隔离配置报错**：设置 APP_ENV；将旧的 `app.distributed.namespace/environment` 改为 `app.identity`。dev 默认 local，生产环境显式指定。
 - **启动报密码占位符无法解析**：Java 进程没有读取 `.env`，请导出 `DB_PASSWORD` 和 `REDIS_PASSWORD`。
 - **连接数据库失败**：检查 Compose 健康状态、端口、实际账号密码；容器内用 `mysql`，宿主机用 `localhost`。
 - **Redis AUTH 失败**：应用环境变量必须与 Redis 实际密码一致；重建/更新 Redis 配置后重试。

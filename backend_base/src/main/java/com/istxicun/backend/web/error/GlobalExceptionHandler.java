@@ -1,10 +1,11 @@
-package com.istxicun.backend.common.exception;
+package com.istxicun.backend.web.error;
 
 import cn.dev33.satoken.exception.NotLoginException;
 import cn.dev33.satoken.exception.NotPermissionException;
 import cn.dev33.satoken.exception.NotRoleException;
 import com.istxicun.backend.common.api.ApiResponse;
-import com.istxicun.backend.distributed.DistributedException;
+import com.istxicun.backend.common.exception.ApplicationException;
+import com.istxicun.backend.common.exception.BusinessException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,13 +25,13 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 public class GlobalExceptionHandler {
   private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-  @ExceptionHandler(DistributedException.class)
-  ResponseEntity<ApiResponse<Void>> distributed(DistributedException ex) {
-    if (ex.getStatus().is5xxServerError())
-      log.error("Distributed infrastructure failure: {}", ex.getCode(), ex);
-    var response = ResponseEntity.status(ex.getStatus());
-    if (ex.getRetryAfter() != null)
-      response.header("Retry-After", Long.toString(ex.getRetryAfter()));
+  @ExceptionHandler(ApplicationException.class)
+  ResponseEntity<ApiResponse<Void>> application(ApplicationException ex) {
+    if (HttpFailureMapper.status(ex.getCategory()).is5xxServerError())
+      log.error("Application failure: {}", ex.getCode(), ex);
+    var response = ResponseEntity.status(HttpFailureMapper.status(ex.getCategory()));
+    if (ex.getRetryAfterSeconds() != null)
+      response.header("Retry-After", Long.toString(ex.getRetryAfterSeconds()));
     return response.body(ApiResponse.error(ex.getCode(), ex.getMessage()));
   }
 

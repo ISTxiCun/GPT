@@ -2,6 +2,7 @@ package com.istxicun.demo;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.istxicun.backend.common.api.ApiResponse;
+import com.istxicun.backend.common.exception.FailureCategory;
 import com.istxicun.backend.distributed.DistributedException;
 import com.istxicun.backend.distributed.key.RedisKeyFactory;
 import com.istxicun.backend.distributed.lock.LockExecutor;
@@ -19,7 +20,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @Configuration(proxyBeanMethods = false)
@@ -51,7 +51,7 @@ public class DemoConfiguration {
     @PostMapping("/api/public/demo/login")
     ApiResponse<Map<String, String>> login(@RequestHeader("X-Demo-Key") String supplied) {
       if (!MessageDigest.isEqual(accessKey, supplied.getBytes(StandardCharsets.UTF_8)))
-        throw new DistributedException(HttpStatus.FORBIDDEN, "DEMO_ACCESS_DENIED", "演示密钥不正确");
+        throw new DistributedException(FailureCategory.FORBIDDEN, "DEMO_ACCESS_DENIED", "演示密钥不正确");
       String user = "demo-" + UUID.randomUUID();
       StpUtil.login(user);
       return ApiResponse.ok(

@@ -1,6 +1,7 @@
 package com.istxicun.backend.distributed.web;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.istxicun.backend.common.exception.FailureCategory;
 import com.istxicun.backend.distributed.DistributedException;
 import com.istxicun.backend.distributed.ratelimit.RateLimit;
 import com.istxicun.backend.distributed.ratelimit.RedisRateLimiter;
@@ -10,7 +11,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Collections;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
@@ -58,7 +58,9 @@ public final class DistributedWebInterceptor implements HandlerInterceptor {
       var headers = Collections.list(request.getHeaders("Idempotency-Key"));
       if (headers.size() != 1)
         throw new DistributedException(
-            HttpStatus.BAD_REQUEST, "INVALID_IDEMPOTENCY_KEY", "需要唯一的 Idempotency-Key 请求头");
+            FailureCategory.INVALID_ARGUMENT,
+            "INVALID_IDEMPOTENCY_KEY",
+            "需要唯一的 Idempotency-Key 请求头");
       String endpoint =
           request.getMethod()
               + ":"

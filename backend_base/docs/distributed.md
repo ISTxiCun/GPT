@@ -17,9 +17,10 @@ export APP_DISTRIBUTED_SUBMISSION_ENABLED=true
 
 ```yaml
 app:
-  distributed:
-    namespace: ${spring.application.name}
+  identity:
+    namespace: ${APP_NAMESPACE:${spring.application.name}}
     environment: ${APP_ENV:}
+  distributed:
     lock:
       enabled: true
       watchdog-millis: 30000
@@ -30,7 +31,7 @@ app:
     trusted-proxies: []
 ```
 
-启用任一能力后，`environment` 必须明确指定；namespace 与 environment 均限制为 1～64 位字母、数字、下划线、连字符。例如 `backend-base:local`、`backend-base:prod`。同一个部署的所有实例必须一致，不同项目/环境必须隔离。
+会话与公共能力统一使用 `app.identity`，普通启动也需要有效环境标识（dev/demo 有本地默认值）；namespace 与 environment 均限制为 1～64 位字母、数字、下划线、连字符。例如 `backend-base:local`、`backend-base:prod`。同一个部署的所有实例必须一致，不同项目/环境必须隔离。
 
 Redis Key 格式为 `namespace:environment:dist:能力:SHA256摘要`。摘要由长度编码后的业务 Key 各部分生成，避免分隔符歧义，且不把用户信息原样放进 Key；摘要不等于加密。
 
@@ -38,7 +39,7 @@ Redis Key 格式为 `namespace:environment:dist:能力:SHA256摘要`。摘要由
 
 当前锁适配器支持 **standalone Redis**，复用 `spring.data.redis` 的 host、port、username、password、database、连接超时与 SSL 开关。URL、Sentinel、Cluster 配置暂不支持，开启锁时会明确拒绝；不要把未支持的拓扑当成已经提供了高可用保证。自定义 TLS 信任材料和其他拓扑需补充适配。
 
-限流和防重复用现有 `StringRedisTemplate`。这些能力的 Key 环境隔离不改变 Sa-Token 默认 Key 命名；登录会话也应使用独立 Redis 实例/数据库或专门的 Sa-Token 命名配置隔离环境。
+限流和防重复用现有 `StringRedisTemplate`。Sa-Token 物理 Key 自动使用同一标识下的 `namespace:environment:session:` 前缀，原始 Token 和 Authorization 请求头协议保持不变。不同项目/环境可以逻辑隔离，同项目同环境继续共享会话。旧无前缀 Token 需要重新登录，旧配置迁移及防回退规则见[架构保护文档](architecture-guardrails.md)。
 
 ## 2. 分布式锁
 
@@ -145,7 +146,7 @@ await api.post('/articles', payload, {
 
 ## 5. 错误处理
 
-上述错误均进入已有标准响应 `ApiResponse`，不把 Redis 地址、堆栈或凭据返回前端。
+核心错误携带与传输协议无关的 `FailureCategory`、业务码和可选重试秒数，由 `web.error` 映射成以下 HTTP 状态及标准响应 `ApiResponse`；任务/MQ 调用方按自己的语义处理。Redis 地址、堆栈和凭据不返回前端。
 
 | HTTP | code | 含义 |
 |---|---|---|

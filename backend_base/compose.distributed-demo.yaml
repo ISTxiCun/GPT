@@ -9,6 +9,7 @@ x-demo-app: &demo-app
   environment: &demo-env
     REDIS_HOST: redis
     REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    APP_NAMESPACE: ${APP_NAMESPACE:-backend-base}
     APP_ENV: ${APP_ENV:-demo}
     DEMO_ACCESS_KEY: ${DEMO_ACCESS_KEY:?Set DEMO_ACCESS_KEY}
   depends_on:

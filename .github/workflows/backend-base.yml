@@ -1,0 +1,51 @@
+name: Backend Base checks
+on:
+  push:
+    paths:
+      - 'backend_base/**'
+      - '.github/workflows/backend-base.yml'
+  pull_request:
+    paths:
+      - 'backend_base/**'
+      - '.github/workflows/backend-base.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend_base
+    services:
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - '127.0.0.1:6379:6379'
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: backend_base/pom.xml
+      - name: Architecture, configuration and real Redis regression tests
+        run: mvn -B -ntp -Predis-it verify
+      - name: Verify production artifact isolation
+        run: |
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          with ZipFile('target/backend-base-0.0.1-SNAPSHOT.jar') as jar:
+              names = jar.namelist()
+              assert not any(name.startswith('BOOT-INF/classes/com/istxicun/demo/') for name in names)
+              assert 'BOOT-INF/classes/application-distributed-demo.yml' not in names
+          PY
+      - name: Compile isolated demonstration
+        run: mvn -B -ntp -Pdistributed-demo package -DskipTests

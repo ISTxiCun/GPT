@@ -4,5 +4,7 @@ springdoc:
   swagger-ui:
     enabled: true
 app:
+  identity:
+    environment: ${APP_ENV:local}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}

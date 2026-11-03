@@ -378,7 +378,7 @@ backend_base/
 └── .module-generator/           # 拟定的规格、摘要与生成记录
 ```
 
-包名可配置但须符合项目约定。跨模块共享类型复用 `common` 和 `distributed`，不复制一份统一响应、异常、锁或限流工具进每个模块。
+包名可配置但须符合项目约定。跨模块共享类型复用 `common` 和 `distributed`，不复制一份统一响应、异常、锁或限流工具进每个模块。生成模板必须复用 `ApplicationIdentity`，不得另设会话/分布式命名空间；核心异常使用 `FailureCategory`，HTTP 映射放在 Web 适配层；业务跨域头通过 `app.cors` 配置扩展。生成结果纳入[架构保护规则](architecture-guardrails.md)验收。
 
 Vue 业务页面生成属于后续独立扩展；首版的 Vue 界面是生成器自身的勾选/预览工具，不自动承诺生成 18 类模块的完整业务前端。
 

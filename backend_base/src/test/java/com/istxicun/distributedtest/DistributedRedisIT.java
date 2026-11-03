@@ -29,7 +29,6 @@ import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -128,8 +127,8 @@ class DistributedRedisIT {
                 + System.getenv().getOrDefault("TEST_REDIS_PASSWORD", ""),
             "--spring.data.redis.database="
                 + System.getenv().getOrDefault("TEST_REDIS_DATABASE", "0"),
-            "--app.distributed.namespace=" + namespace,
-            "--app.distributed.environment=test",
+            "--app.identity.namespace=" + namespace,
+            "--app.identity.environment=test",
             "--app.distributed.lock.enabled=true",
             "--app.distributed.lock.watchdog-millis=1000",
             "--app.distributed.rate-limit.enabled=true",
@@ -405,7 +404,10 @@ class DistributedRedisIT {
                       RateLimit.FailurePolicy.CLOSED))
           .isInstanceOfSatisfying(
               DistributedException.class,
-              ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+              ex ->
+                  assertThat(ex.getCategory())
+                      .isEqualTo(
+                          com.istxicun.backend.common.exception.FailureCategory.UNAVAILABLE));
       assertThatCode(
               () ->
                   rate.check(
@@ -422,7 +424,10 @@ class DistributedRedisIT {
                       .acquire("user", "POST:/api/test", UUID.randomUUID().toString(), 5))
           .isInstanceOfSatisfying(
               DistributedException.class,
-              ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+              ex ->
+                  assertThat(ex.getCategory())
+                      .isEqualTo(
+                          com.istxicun.backend.common.exception.FailureCategory.UNAVAILABLE));
     } finally {
       factory.destroy();
     }
@@ -434,6 +439,8 @@ class DistributedRedisIT {
                     .execute("stopped", Duration.ZERO, () -> "never"))
         .isInstanceOfSatisfying(
             DistributedException.class,
-            ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+            ex ->
+                assertThat(ex.getCategory())
+                    .isEqualTo(com.istxicun.backend.common.exception.FailureCategory.UNAVAILABLE));
   }
 }

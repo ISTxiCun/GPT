@@ -4,8 +4,9 @@ spring:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
       - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
 app:
-  distributed:
+  identity:
     environment: ${APP_ENV:demo}
+  distributed:
     lock:
       enabled: true
     rate-limit:

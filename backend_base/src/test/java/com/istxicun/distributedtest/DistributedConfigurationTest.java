@@ -3,6 +3,7 @@ package com.istxicun.distributedtest;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.istxicun.backend.config.identity.ApplicationIdentityConfiguration;
 import com.istxicun.backend.distributed.*;
 import com.istxicun.backend.distributed.key.RedisKeyFactory;
 import com.istxicun.backend.distributed.lock.LockExecutor;
@@ -33,7 +34,9 @@ class DistributedConfigurationTest {
               AutoConfigurations.of(
                   ConfigurationPropertiesAutoConfiguration.class,
                   ValidationAutoConfiguration.class))
-          .withUserConfiguration(DistributedConfiguration.class);
+          .withUserConfiguration(
+              DistributedConfiguration.class, ApplicationIdentityConfiguration.class)
+          .withPropertyValues("app.identity.environment=test");
 
   public static class Endpoints {
     @RateLimit(key = "test", limit = 1, windowSeconds = 1)
@@ -76,10 +79,10 @@ class DistributedConfigurationTest {
   }
 
   @Test
-  void explicitEnvironmentRequiredWhenEnabling() {
+  void explicitEnvironmentRequiredEvenWithFeaturesDisabled() {
     runner
         .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
-        .withPropertyValues("app.distributed.rate-limit.enabled=true")
+        .withPropertyValues("app.identity.environment=")
         .run(ctx -> assertThat(ctx).hasFailed().getFailure().hasStackTraceContaining("APP_ENV"));
   }
 
@@ -111,7 +114,7 @@ class DistributedConfigurationTest {
         .withUserConfiguration(DistributedWebConfiguration.class)
         .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
         .withPropertyValues(
-            "app.distributed.submission.enabled=true", "app.distributed.environment=test")
+            "app.distributed.submission.enabled=true", "app.identity.environment=test")
         .withBean(
             "requestMappingHandlerMapping",
             RequestMappingHandlerMapping.class,
@@ -136,7 +139,7 @@ class DistributedConfigurationTest {
         .withUserConfiguration(DistributedWebConfiguration.class)
         .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
         .withPropertyValues(
-            "app.distributed.rate-limit.enabled=true", "app.distributed.environment=test")
+            "app.distributed.rate-limit.enabled=true", "app.identity.environment=test")
         .withBean(
             "requestMappingHandlerMapping",
             RequestMappingHandlerMapping.class,
@@ -161,7 +164,7 @@ class DistributedConfigurationTest {
         .withUserConfiguration(DistributedWebConfiguration.class)
         .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
         .withPropertyValues(
-            "app.distributed.rate-limit.enabled=true", "app.distributed.environment=test")
+            "app.distributed.rate-limit.enabled=true", "app.identity.environment=test")
         .withBean(
             "requestMappingHandlerMapping",
             RequestMappingHandlerMapping.class,
@@ -186,7 +189,7 @@ class DistributedConfigurationTest {
         .withUserConfiguration(DistributedWebConfiguration.class)
         .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
         .withPropertyValues(
-            "app.distributed.submission.enabled=true", "app.distributed.environment=test")
+            "app.distributed.submission.enabled=true", "app.identity.environment=test")
         .withBean(
             "requestMappingHandlerMapping",
             RequestMappingHandlerMapping.class,

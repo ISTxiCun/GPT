@@ -1,5 +1,6 @@
 package com.istxicun.backend.distributed;
 
+import com.istxicun.backend.common.identity.ApplicationIdentity;
 import com.istxicun.backend.distributed.key.RedisKeyFactory;
 import com.istxicun.backend.distributed.lock.LockExecutor;
 import com.istxicun.backend.distributed.ratelimit.RedisRateLimiter;
@@ -19,8 +20,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @EnableConfigurationProperties(DistributedProperties.class)
 public class DistributedConfiguration {
   @Bean
-  RedisKeyFactory redisKeyFactory(DistributedProperties properties) {
-    return new RedisKeyFactory(properties);
+  RedisKeyFactory redisKeyFactory(ApplicationIdentity identity) {
+    return new RedisKeyFactory(identity);
   }
 
   @Bean

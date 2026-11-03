@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 @SpringBootTest(
     properties = {
+      "app.identity.environment=test",
       "spring.datasource.url=jdbc:h2:mem:foundation;MODE=MySQL;DB_CLOSE_DELAY=-1",
       "spring.datasource.driver-class-name=org.h2.Driver",
       "spring.datasource.username=sa",

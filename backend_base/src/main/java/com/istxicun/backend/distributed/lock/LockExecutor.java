@@ -1,5 +1,6 @@
 package com.istxicun.backend.distributed.lock;
 
+import com.istxicun.backend.common.exception.FailureCategory;
 import com.istxicun.backend.distributed.DistributedException;
 import com.istxicun.backend.distributed.key.RedisKeyFactory;
 import java.time.Duration;
@@ -9,7 +10,6 @@ import java.util.function.Supplier;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.redisson.client.RedisException;
-import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** Synchronous, same-thread critical section. Start and commit transactions inside the callback. */
@@ -35,11 +35,11 @@ public final class LockExecutor {
     RLock lock = redisson.getLock(keys.key("lock", logicalKey));
     try {
       if (!lock.tryLock(waitTime.toMillis(), TimeUnit.MILLISECONDS))
-        throw new DistributedException(HttpStatus.CONFLICT, "LOCK_BUSY", "操作正在处理中，请稍后重试");
+        throw new DistributedException(FailureCategory.CONFLICT, "LOCK_BUSY", "操作正在处理中，请稍后重试");
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
       throw new DistributedException(
-          HttpStatus.SERVICE_UNAVAILABLE, "LOCK_INTERRUPTED", "等待锁被中断", null, ex);
+          FailureCategory.UNAVAILABLE, "LOCK_INTERRUPTED", "等待锁被中断", null, ex);
     } catch (RedisException ex) {
       throw DistributedException.unavailable(ex);
     }
@@ -57,11 +57,7 @@ public final class LockExecutor {
         if (primary != null) primary.addSuppressed(ex);
         else
           throw new DistributedException(
-              HttpStatus.SERVICE_UNAVAILABLE,
-              "LOCK_RELEASE_FAILED",
-              "锁释放或所有权校验失败，请确认操作结果",
-              null,
-              ex);
+              FailureCategory.UNAVAILABLE, "LOCK_RELEASE_FAILED", "锁释放或所有权校验失败，请确认操作结果", null, ex);
       }
     }
   }

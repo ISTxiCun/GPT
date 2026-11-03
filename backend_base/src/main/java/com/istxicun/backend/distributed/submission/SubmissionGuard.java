@@ -1,11 +1,11 @@
 package com.istxicun.backend.distributed.submission;
 
+import com.istxicun.backend.common.exception.FailureCategory;
 import com.istxicun.backend.distributed.DistributedException;
 import com.istxicun.backend.distributed.key.RedisKeyFactory;
 import java.time.Duration;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 
 /** Short-window admission guard, not a durable business idempotency record. */
 public final class SubmissionGuard {
@@ -21,7 +21,9 @@ public final class SubmissionGuard {
     validateWindow(windowSeconds);
     if (requestKey == null || !requestKey.matches("[A-Za-z0-9][A-Za-z0-9._:-]{7,127}"))
       throw new DistributedException(
-          HttpStatus.BAD_REQUEST, "INVALID_IDEMPOTENCY_KEY", "请提供 8 至 128 位 Idempotency-Key");
+          FailureCategory.INVALID_ARGUMENT,
+          "INVALID_IDEMPOTENCY_KEY",
+          "请提供 8 至 128 位 Idempotency-Key");
     Boolean accepted;
     try {
       accepted =
@@ -38,7 +40,7 @@ public final class SubmissionGuard {
       throw DistributedException.unavailable(
           new IllegalStateException("No submission guard result"));
     if (!accepted)
-      throw new DistributedException(HttpStatus.CONFLICT, "DUPLICATE_SUBMISSION", "请勿重复提交");
+      throw new DistributedException(FailureCategory.CONFLICT, "DUPLICATE_SUBMISSION", "请勿重复提交");
     // Deliberately retained on both success and failure until TTL expires. No result replay.
   }
 
