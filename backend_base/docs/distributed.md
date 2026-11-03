@@ -223,3 +223,7 @@ docker compose -f compose.distributed-demo.yaml down
 演示使用独立 Compose 项目与 Redis 数据卷，`down` 保留演示 Redis 数据。不要在有需要保留的数据时使用 `-v`。如果 8090 被占用，可调整 Compose 端口，再用 `python3 scripts/verify_distributed.py --base-url http://127.0.0.1:新端口`。
 
 PowerShell 用户按 README 设置环境变量后执行相同 Maven、Compose、Python 命令；验证脚本需要环境变量 `DEMO_ACCESS_KEY`。
+
+## 后续开发计划
+
+V2 缓存、V3 可靠异步处理、V4 运行与观测的范围、实施顺序和验收标准见 [分布式开发路线图](distributed-roadmap.md)。这些阶段尚未实现，当前可用能力以本文 V1 为准。
