@@ -471,4 +471,5 @@ V2～V4 的接口、实施顺序和验收标准记录在[开发路线图](docs/d
 confirm/return 发布结果、手动 ACK、有界重试、授权审计重放、MySQL 消费幂等与可选 Outbox。
 `app.distributed.messaging.enabled`、`consumers-enabled` 和 `outbox.enabled` 均默认关闭；
 启用 JDBC 能力须显式增加 `classpath:db/messaging` 迁移位置。语义为至少一次，业务负责幂等。
+消费者名称不能以 `.failed` 或 `.retry.<数字>` 结尾，避免与内部队列碰撞。
 验证用 `mvn -Pmessaging-it verify`，演示依赖见 `compose.messaging-demo.yaml`。

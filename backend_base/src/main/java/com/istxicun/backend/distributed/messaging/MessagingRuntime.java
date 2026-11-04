@@ -46,7 +46,7 @@ public final class MessagingRuntime implements SmartLifecycle {
     this.handlers = List.copyOf(handlers);
     Set<String> unique = new HashSet<>();
     for (var handler : handlers) {
-      MessagingNames.component(handler.consumerName());
+      MessagingNames.consumer(handler.consumerName());
       MessagingNames.component(handler.eventType());
       if (!unique.add(handler.consumerName())
           || handler.schemaVersion() < 1

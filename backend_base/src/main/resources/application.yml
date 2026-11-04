@@ -91,6 +91,7 @@ app:
       fallback-concurrency: 8
       max-payload-bytes: 1048576
       evict-invalid: true
+    # consumerName 不得以 .failed 或 .retry.<数字> 结尾。
     messaging:
       enabled: false
       host: ${RABBITMQ_HOST:localhost}
