@@ -23,7 +23,7 @@ public final class JdbcConsumerIdempotency implements ConsumerIdempotency {
 
   @Override
   public void execute(String consumer, MessageEnvelope envelope, Runnable action) {
-    MessagingNames.component(consumer);
+    MessagingNames.consumer(consumer);
     Objects.requireNonNull(action);
     tx.executeWithoutResult(
         status -> {

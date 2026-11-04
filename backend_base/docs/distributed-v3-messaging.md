@@ -106,6 +106,8 @@ Outbox 租约必须大于 `batch-size * confirm-timeout-millis + 1000`。
 物理名为 `<namespace>.<environment>.msg.events/work/retry/failed`，以及
 `<prefix>consumer.<consumerName>[.retry.<level>|.failed]`，唯一身份来源仍为 `app.identity`。
 消费者名称及事件类型须为 1～64 位小写字母、数字、点或连字符，并以字母开头。
+消费者名称禁止以 `.failed` 或 `.retry.<数字>` 结尾；这些后缀保留给内部失败/重试队列。普通点号名称如 `orders.projection` 保持兼容，事件类型不受此限制。
+已有保留后缀消费组须先停消费者，审核并排空/受控转移旧队列，再使用新名称部署；不得直接删队列。消费组名称改变会切换幂等记录范围，迁移前须检查业务幂等。
 同进程消费者名称不能重复；同一消费组实例使用相同处理器声明和配置。
 修改已有队列参数会由 RabbitMQ 明确拒绝，不能静默复用不兼容拓扑；需要迁移消费组名称并排空旧队列。
 部署必须限制 vhost/用户权限，隔离名称不能代替 RabbitMQ ACL。

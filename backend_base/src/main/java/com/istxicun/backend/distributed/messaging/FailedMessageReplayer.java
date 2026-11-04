@@ -24,7 +24,7 @@ public final class FailedMessageReplayer {
 
   public synchronized boolean replayOne(
       String consumer, String operator, Runnable authorize, BiConsumer<String, String> audit) {
-    MessagingNames.component(consumer);
+    MessagingNames.consumer(consumer);
     if (operator == null
         || operator.isBlank()
         || operator.length() > 128

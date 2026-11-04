@@ -15,6 +15,17 @@ public final class MessagingNames {
     return value;
   }
 
+  /**
+   * Reserved suffixes identify infrastructure queues, including across separately deployed groups.
+   */
+  public static String consumer(String value) {
+    component(value);
+    if (value.endsWith(".failed") || value.matches(".*\\.retry\\.[0-9]+"))
+      throw new IllegalArgumentException(
+          "Consumer name ends with reserved .failed or .retry.<number> suffix");
+    return value;
+  }
+
   public String events() {
     return prefix + "events";
   }
@@ -32,7 +43,7 @@ public final class MessagingNames {
   }
 
   public String queue(String consumer) {
-    return prefix + "consumer." + component(consumer);
+    return prefix + "consumer." + consumer(consumer);
   }
 
   public String retryQueue(String consumer, int level) {
