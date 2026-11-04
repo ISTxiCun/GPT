@@ -35,6 +35,16 @@ class FoundationIntegrationTest {
   @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
   @Test
+  void disabledObservabilityCreatesNoRemoteExporters() {
+    org.assertj.core.api.Assertions.assertThat(
+            context.getBeansOfType(io.opentelemetry.sdk.trace.export.SpanExporter.class))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(
+            context.getBeansOfType(io.micrometer.prometheusmetrics.PrometheusMeterRegistry.class))
+        .isEmpty();
+  }
+
+  @Test
   void disabledMessagingCreatesNoClientsWorkersOrOptionalTables() {
     org.assertj.core.api.Assertions.assertThat(
             context.getBeansOfType(

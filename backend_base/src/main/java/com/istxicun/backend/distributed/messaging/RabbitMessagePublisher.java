@@ -49,6 +49,7 @@ public final class RabbitMessagePublisher implements MessagePublisher {
       throw new IllegalArgumentException("Invalid route");
     if (message.getBody().length > properties.maxMessageBytes())
       throw new IllegalArgumentException("Message exceeds configured size");
+    long started = System.nanoTime();
     var correlation = new CorrelationData(UUID.randomUUID().toString());
     PublishResult.Status status;
     try {
@@ -65,6 +66,9 @@ public final class RabbitMessagePublisher implements MessagePublisher {
     } catch (Exception ex) {
       status = PublishResult.Status.UNKNOWN;
     }
+    metrics
+        .timer("distributed.messaging.publish.confirm")
+        .record(System.nanoTime() - started, TimeUnit.NANOSECONDS);
     metrics.counter("distributed.messaging.publish", "result", status.name()).increment();
     return new PublishResult(status);
   }

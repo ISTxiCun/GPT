@@ -1,6 +1,6 @@
 # V4 规划：运行与观测
 
-**状态：未实现。** 本阶段完善指标、追踪、探针、停机和故障验证；不直接引入服务注册中心、业务网关或微服务拆分。方案见 [路线图](distributed-roadmap.md)。
+**状态：基础能力已实现，完整故障矩阵待真实依赖验收。** 本阶段完善指标、追踪、探针、停机和故障验证；不直接引入服务注册中心、业务网关或微服务拆分。方案见 [路线图](distributed-roadmap.md)。
 
 ## 1. 当前基础与拟用技术
 
@@ -75,12 +75,57 @@ Nginx 的开源轮询配置不等同于编排系统主动就绪探针。演示�
 
 ## 7. 开发任务与验收
 
-- [ ] 列出现有 Actuator、日志、停机行为，定稿新增内容。
-- [ ] 定稿观测开关、采样、资源预算和标签清单。
-- [ ] 接入 Micrometer/OTel 与有限的 HTTP、Redis、MQ 埋点。
+- [x] 列出现有 Actuator、日志、停机行为，定稿新增内容。
+- [x] 定稿观测开关、采样、资源预算和标签清单。
+- [x] 接入 Micrometer/OTel 与有限的 HTTP、Redis、MQ 埋点。
 - [ ] 完善上下文传递、清理、脱敏及导出故障处理。
 - [ ] 完善健康分组和 HTTP/消费者/投递器停机顺序。
-- [ ] 提供仪表盘、告警建议、故障脚本和使用文档。
+- [x] 提供仪表盘、告警建议、故障脚本和使用文档。
 - [ ] 验证默认关闭兼容性，以及独立演示中上述故障矩阵。
 
 完成标准是能定位失败、判断就绪和观察恢复过程；不等于自动扩容、自动业务补偿或已经完成生产高可用架构。
+
+
+## 8. 实现配置与边界
+
+观测演示见 [使用说明](../demo/observability/README.md)。
+现有 RequestIdFilter、Actuator 管理端口、Boot graceful shutdown 均继续复用。
+依赖版本由 Boot 3.5.9 BOM 管理，编译目标 JDK 17。
+
+| 配置 | 默认值 / 含义 |
+|---|---|
+| TRACING_ENABLED | false，启用 Micrometer OTel bridge |
+| TRACING_EXPORT_ENABLED | false，独立启用 OTLP exporter |
+| TRACING_SAMPLE_PROBABILITY | 0.1 |
+| OTLP_TRACES_ENDPOINT | http://localhost:4318/v1/traces |
+| PROMETHEUS_ENABLED | false；启用后还须将 prometheus 加入 MANAGEMENT_ENDPOINTS |
+| MANAGEMENT_ENDPOINTS | health,info |
+| MANAGEMENT_ADDRESS | 127.0.0.1 |
+| /actuator/health/liveness | 仅 livenessState，外部依赖故障不触发重启 |
+| /actuator/health/readiness、业务端口 /readyz | readinessState、数据库、认证 Redis；MQ 启用时额外包含 messaging |
+
+依赖失败时 readiness 返回 503；详情不公开。Redis 超时 3s、连接池连接超时 5s，
+Rabbit 建连超时 5s；探针需按依赖组合配置足够超时，UP 不承诺所有业务成功。
+OTLP 连接 1s、发送 2s，批量队列 1024、每批 128、间隔 2s、导出预算 2s；
+队列满时 SDK 丢弃，不能无限缓存。追踪开关与导出开关均须明确开启才能远程发送。
+
+指标预算：V1 lock result 最多 5 值、rate.limit 最多 4 值、submission 最多 3 值；
+缓存 event 来自代码常量，不标记 region；MQ result 来自枚举/代码常量，不标记 consumer。
+锁等待/持有、缓存回源、MQ confirm/consume 为无业务标签 Timer。
+HTTP uri 最多 100 值，超过预算拒绝新增对应 meter；采用框架路由模板。
+不把任意规则名、Redis Key、用户、消息或追踪标识加入指标。
+Outbox pending/oldest.age 在投递周期刷新，代表应用库待发送状态，不是 broker 队列深度；
+数据库故障期间保留上次采样，需结合数据库健康判断。
+
+尚待真实环境完成：完整双实例链路核对、Redis OPEN/CLOSED/缓存策略故障、
+MQ 恢复与终止回收、Collector 中断压力、动态 ID 基数压力、长时重试 Link 策略。
+演示探针脚本仅提供可复现记录，不将未运行的矩阵标记为已验收。
+
+
+本次实际验证（JDK 17）：`mvn verify`、`mvn -Predis-it verify`、
+`mvn -Pmessaging-it verify`、`mvn -Pdistributed-demo -DskipTests package` 均通过。
+Redis profile 中可选 CacheMysqlIT 未配置 TEST_MYSQL_URL，因此跳过；
+消息 profile 使用真实 MySQL/RabbitMQ。生产 jar 已检查不包含演示类/配置。
+实际启动单实例演示验证 Prometheus 和 readiness，停止 Redis 时 liveness=200、
+readiness=503，重启后 readiness=200。Compose 合并配置及故障脚本语法已检查。
+未运行完整观测 Compose 和其全部故障矩阵，不能将上述回归等同于全矩阵验收。

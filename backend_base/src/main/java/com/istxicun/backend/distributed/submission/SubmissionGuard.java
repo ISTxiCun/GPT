@@ -11,10 +11,23 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 public final class SubmissionGuard {
   private final StringRedisTemplate redis;
   private final RedisKeyFactory keys;
+  private final io.micrometer.core.instrument.MeterRegistry metrics;
 
   public SubmissionGuard(StringRedisTemplate redis, RedisKeyFactory keys) {
+    this(redis, keys, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+  }
+
+  public SubmissionGuard(
+      StringRedisTemplate redis,
+      RedisKeyFactory keys,
+      io.micrometer.core.instrument.MeterRegistry metrics) {
     this.redis = redis;
     this.keys = keys;
+    this.metrics = metrics;
+  }
+
+  private void count(String result) {
+    metrics.counter("distributed.submission", "result", result).increment();
   }
 
   public void acquire(String userId, String endpoint, String requestKey, long windowSeconds) {
@@ -34,13 +47,19 @@ public final class SubmissionGuard {
                   "1",
                   Duration.ofSeconds(windowSeconds));
     } catch (DataAccessException ex) {
+      count("backend-failure");
       throw DistributedException.unavailable(ex);
     }
-    if (accepted == null)
+    if (accepted == null) {
+      count("backend-failure");
       throw DistributedException.unavailable(
           new IllegalStateException("No submission guard result"));
-    if (!accepted)
+    }
+    if (!accepted) {
+      count("rejected");
       throw new DistributedException(FailureCategory.CONFLICT, "DUPLICATE_SUBMISSION", "请勿重复提交");
+    }
+    count("accepted");
     // Deliberately retained on both success and failure until TTL expires. No result replay.
   }
 
