@@ -148,8 +148,10 @@ public final class CacheClient {
   }
 
   private <T> T load(CacheKey key, CacheType<T> type, CachePolicy policy, Supplier<T> loader) {
+    requireCommittedRead();
     count("load");
     T value = loader.get(); // Exceptions propagate; never turn failures into negative entries.
+    requireCommittedRead();
     String raw;
     try {
       ObjectNode node = mapper.createObjectNode();
@@ -173,6 +175,13 @@ public final class CacheClient {
       LOG.warn("Cache write failed", ex);
     }
     return value;
+  }
+
+  private void requireCommittedRead() {
+    if (TransactionSynchronizationManager.isActualTransactionActive())
+      throw new IllegalStateException(
+          "Cache refill requires no active transaction; commit the loader transaction before"
+              + " returning");
   }
 
   public void evict(CacheKey key) {

@@ -462,6 +462,7 @@ V2～V4 的接口、实施顺序和验收标准记录在[开发路线图](docs/d
 
 已提供 [CacheClient 使用与故障语义](docs/distributed-v2-cache.md)。
 默认关闭，通过 `app.distributed.cache.enabled` 开启，热点保护需要同时开启 V1 锁。
+缓存未命中时须在活动事务外回填；loader 内部事务应在返回前提交。
 支持泛型三态读取、TTL 抖动、空值缓存、有界热点加载和提交后失效；不提供强一致保证。
 
 ### V3 可靠异步消息
