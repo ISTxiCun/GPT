@@ -49,3 +49,39 @@ jobs:
           PY
       - name: Compile isolated demonstration
         run: mvn -B -ntp -Pdistributed-demo package -DskipTests
+  messaging-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend_base
+    services:
+      rabbitmq:
+        image: rabbitmq:4.1-management
+        env:
+          RABBITMQ_DEFAULT_USER: messaging
+          RABBITMQ_DEFAULT_PASS: messaging-test
+          RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: '-rabbit dead_letter_worker_publisher_confirm_timeout 1000'
+        ports: ['5672:5672']
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: messaging-test
+          MYSQL_DATABASE: messaging_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pmessaging-test"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: backend_base/pom.xml
+      - name: Real RabbitMQ and MySQL messaging acceptance
+        run: mvn -B -ntp -Pmessaging-it verify

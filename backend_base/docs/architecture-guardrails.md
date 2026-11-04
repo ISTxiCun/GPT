@@ -80,3 +80,15 @@ app:
 CI 工作流位于仓库 `.github/workflows/backend-base.yml`。若要在合并前强制执行，应在仓库 ruleset/分支保护中将 `backend-checks` 设为必需检查；这里只提交工作流，不改仓库合并策略。开发者仍需评审测试和规则本身的修改，自动化不能替代架构判断。
 
 后续增加模块或模板时，复用上述配置和类型，扩展测试而非复制另一份实现。生成代码也应经过同一组架构与配置回归检查。
+
+## 5. 消息默认关闭与事务边界
+
+V3 排除 `RabbitAutoConfiguration`，MQ 连接、拓扑和消费者仅由独立消息配置创建。
+`app.distributed` 严格绑定包含 messaging 子配置，不能通过放宽未知字段检查兼容新增配置。
+消息表放 `db/messaging` 独立迁移位置，默认 Flyway 不包含它；关闭开关不删除持久数据。
+生产包不包含消息演示或运维重放 CLI。
+
+`MessagePublisher` 在本地事务外确认发布，事务内发送意图使用 Outbox。
+数据库幂等记录与同库业务变更一并提交，提交后才 ACK；失败转发先 confirm 后 ACK。
+`mvn -Pmessaging-it verify` 用真实 RabbitMQ/MySQL 和独立 JVM 验证这些边界，
+默认应用测试验证 MQ 关闭时没有连接客户端、后台投递器及消息基础表。

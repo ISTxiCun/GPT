@@ -463,3 +463,11 @@ V2～V4 的接口、实施顺序和验收标准记录在[开发路线图](docs/d
 已提供 [CacheClient 使用与故障语义](docs/distributed-v2-cache.md)。
 默认关闭，通过 `app.distributed.cache.enabled` 开启，热点保护需要同时开启 V1 锁。
 支持泛型三态读取、TTL 抖动、空值缓存、有界热点加载和提交后失效；不提供强一致保证。
+
+### V3 可靠异步消息
+
+[消息接入、迁移、失败恢复与演示](docs/distributed-v3-messaging.md)提供 RabbitMQ 4.1 quorum 队列、
+confirm/return 发布结果、手动 ACK、有界重试、授权审计重放、MySQL 消费幂等与可选 Outbox。
+`app.distributed.messaging.enabled`、`consumers-enabled` 和 `outbox.enabled` 均默认关闭；
+启用 JDBC 能力须显式增加 `classpath:db/messaging` 迁移位置。语义为至少一次，业务负责幂等。
+验证用 `mvn -Pmessaging-it verify`，演示依赖见 `compose.messaging-demo.yaml`。

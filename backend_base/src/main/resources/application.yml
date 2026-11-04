@@ -90,6 +90,26 @@ app:
       fallback-concurrency: 8
       max-payload-bytes: 1048576
       evict-invalid: true
+    messaging:
+      enabled: false
+      host: ${RABBITMQ_HOST:localhost}
+      port: ${RABBITMQ_PORT:5672}
+      virtual-host: ${RABBITMQ_VHOST:/}
+      username: ${RABBITMQ_USERNAME:}
+      password: ${RABBITMQ_PASSWORD:}
+      tls: false
+      confirm-timeout-millis: 5000
+      max-message-bytes: 1048576
+      consumers-enabled: false
+      prefetch: 16
+      concurrency: 1
+      retry-delays-millis: [1000, 10000, 60000]
+      outbox:
+        enabled: false
+        poll-millis: 1000
+        batch-size: 10
+        lease-millis: 60000
+        max-attempts: 10
     trusted-proxies: []
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}

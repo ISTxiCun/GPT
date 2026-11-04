@@ -31,6 +31,30 @@ import org.springframework.web.bind.annotation.*;
 @Import(FoundationIntegrationTest.ProbeController.class)
 class FoundationIntegrationTest {
   @Autowired MockMvc mvc;
+  @Autowired org.springframework.context.ApplicationContext context;
+  @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+  @Test
+  void disabledMessagingCreatesNoClientsWorkersOrOptionalTables() {
+    org.assertj.core.api.Assertions.assertThat(
+            context.getBeansOfType(
+                org.springframework.amqp.rabbit.connection.ConnectionFactory.class))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(
+            context.getBeansOfType(
+                com.istxicun.backend.distributed.messaging.MessagePublisher.class))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(
+            context.getBeansOfType(
+                com.istxicun.backend.distributed.messaging.OutboxDispatcher.class))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE UPPER(TABLE_NAME) IN"
+                    + " ('INFRA_MESSAGE_OUTBOX','INFRA_MESSAGE_CONSUMED')",
+                Integer.class))
+        .isZero();
+  }
 
   @RestController
   static class ProbeController {
