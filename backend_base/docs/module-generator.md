@@ -514,6 +514,7 @@ Vue 业务页面生成属于后续独立扩展；首版的 Vue 界面是生成�
 `cache-v2/envelope-1` 提供 `CacheClient`、`CacheKey`、`CacheType`、`CachePolicy`。
 生成模板应复用这些 API 和 `app.distributed.cache`，禁止复制缓存实现或单独配置环境标识。
 权限缓存键包含租户/用户范围，更新使用 `evictAfterCommit`；开启热点保护要求 V1 锁且加载在事务外。
+模板不得捕获 loader 异常后无条件重试；Redis 各读取阶段的降级由 CacheClient 统一释放锁并限制并发。
 配置与故障语义见 [V2 缓存](distributed-v2-cache.md)。
 
 ### 消息公共能力
