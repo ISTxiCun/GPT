@@ -79,6 +79,7 @@ app:
       enabled: false
     submission:
       enabled: false
+    # 缓存回填须在活动事务外，loader 内部事务返回前完成提交。
     cache:
       enabled: false
       ttl-millis: 300000

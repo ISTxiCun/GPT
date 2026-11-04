@@ -83,6 +83,35 @@ class CacheMysqlIT {
                       jdbc.queryForObject(
                           "SELECT val FROM " + table + " WHERE id=1", String.class)))
           .isEqualTo("new");
+      cache.evict(key);
+      assertThatThrownBy(
+              () ->
+                  tx.executeWithoutResult(
+                      status -> {
+                        jdbc.update("UPDATE " + table + " SET val='dirty' WHERE id=1");
+                        cache.getOrLoad(
+                            key,
+                            type,
+                            () ->
+                                jdbc.queryForObject(
+                                    "SELECT val FROM " + table + " WHERE id=1", String.class));
+                      }))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("Cache refill");
+      assertThat(jdbc.queryForObject("SELECT val FROM " + table + " WHERE id=1", String.class))
+          .isEqualTo("new");
+      assertThat(cache.get(key, type).hit()).isFalse();
+      assertThat(
+              cache.getOrLoad(
+                  key,
+                  type,
+                  () ->
+                      tx.execute(
+                          status ->
+                              jdbc.queryForObject(
+                                  "SELECT val FROM " + table + " WHERE id=1", String.class))))
+          .isEqualTo("new");
+      assertThat(cache.get(key, type).value()).isEqualTo("new");
     } finally {
       cache.evict(key);
       jdbc.execute("DROP TABLE IF EXISTS " + table);
