@@ -87,6 +87,7 @@ app:
       jitter-millis: 30000
       load-wait-millis: 1000
       protect-loads: false
+      # 覆盖三处读取；锁内读取失败会先释放锁，再受限回源。
       fallback-on-read-failure: false
       fallback-concurrency: 8
       max-payload-bytes: 1048576

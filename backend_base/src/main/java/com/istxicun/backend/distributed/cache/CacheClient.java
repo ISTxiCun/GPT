@@ -116,11 +116,12 @@ public final class CacheClient {
     Objects.requireNonNull(loader);
     Objects.requireNonNull(type);
     requireLock(policy);
-    CacheResult<T> result;
     try {
-      result = get(key, type);
-    } catch (DistributedException ex) {
-      if (!policy.fallbackOnReadFailure() || !ex.getCode().equals("CACHE_READ_FAILED")) throw ex;
+      return readThrough(key, type, policy, loader);
+    } catch (CacheReadFailure ex) {
+      // LockExecutor has already released the loading lock before we enter degraded loading.
+      for (var suppressed : ex.getSuppressed()) ex.original.addSuppressed(suppressed);
+      if (ex.getSuppressed().length != 0 || !policy.fallbackOnReadFailure()) throw ex.original;
       if (!fallback.tryAcquire()) throw failure("CACHE_FALLBACK_BUSY", null);
       try {
         count("fallback");
@@ -129,21 +130,47 @@ public final class CacheClient {
         fallback.release();
       }
     }
+  }
+
+  private <T> T readThrough(
+      CacheKey key, CacheType<T> type, CachePolicy policy, Supplier<T> loader) {
+    CacheResult<T> result = readForLoad(key, type);
     if (result.hit()) return result.value();
     if (!policy.protectLoads()) return load(key, type, policy, loader);
+    boolean[] acquired = {false};
     try {
       return locks.execute(
           physicalKey(key),
           policy.loadWait(),
           () -> {
-            CacheResult<T> second = get(key, type);
+            acquired[0] = true;
+            CacheResult<T> second = readForLoad(key, type);
             return second.hit() ? second.value() : load(key, type, policy, loader);
           });
     } catch (DistributedException ex) {
-      if (!ex.getCode().equals("LOCK_BUSY")) throw ex;
-      CacheResult<T> last = get(key, type);
+      // Do not mistake a loader's business exception for failure to acquire our loading lock.
+      if (acquired[0] || !ex.getCode().equals("LOCK_BUSY")) throw ex;
+      CacheResult<T> last = readForLoad(key, type);
       if (last.hit()) return last.value();
       throw failure("CACHE_LOAD_TIMEOUT", ex);
+    }
+  }
+
+  private <T> CacheResult<T> readForLoad(CacheKey key, CacheType<T> type) {
+    try {
+      return get(key, type);
+    } catch (DistributedException ex) {
+      if (!ex.getCode().equals("CACHE_READ_FAILED")) throw ex;
+      throw new CacheReadFailure(ex);
+    }
+  }
+
+  private static final class CacheReadFailure extends RuntimeException {
+    private final DistributedException original;
+
+    CacheReadFailure(DistributedException original) {
+      super(original);
+      this.original = original;
     }
   }
 
