@@ -10,13 +10,16 @@ services:
       MANAGEMENT_ADDRESS: 0.0.0.0
       MANAGEMENT_ENDPOINTS: health,info,prometheus
       MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE: readinessState,redis
-    ports: ['127.0.0.1:18081:8081']
+    ports: ['127.0.0.1:18081:8081', '127.0.0.1:18080:8080']
   app-b:
     environment: *observability
-    ports: ['127.0.0.1:28081:8081']
+    ports: ['127.0.0.1:28081:8081', '127.0.0.1:28080:8080']
   collector:
-    image: otel/opentelemetry-collector-contrib:0.123.0
+    image: otel/opentelemetry-collector:0.123.0
     command: ['--config=/etc/otelcol/config.yaml']
+    environment:
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1},jaeger
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1},jaeger
     volumes: ['./demo/observability/collector.yaml:/etc/otelcol/config.yaml:ro']
   jaeger:
     image: jaegertracing/all-in-one:1.68.0

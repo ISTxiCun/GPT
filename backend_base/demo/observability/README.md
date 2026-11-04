@@ -40,3 +40,14 @@ Nginx 使用被动轮询，不读取 readiness。停机前生产编排器应先�
 MQ 重试使用独立的有限时长消费 Span，并继承发布因果上下文；原 HTTP Span 不会保持打开。
 这保留重试因果树，不等于重试耗时是 HTTP 延迟；长时间重试的跨 trace Link 尚未实现。
 托管线程池传递观测上下文及 MDC，并恢复工作线程原值；任意自建线程不在此保证内。
+
+完整断言验收可运行 `python3 demo/observability/verify.py`。它会停止并恢复本地演示组件，
+生成 `target-demo/fault-results/acceptance.json`；失败返回非零。新增的动态路径与线程池
+验证接口只进入 `distributed-demo` 包。管理和业务直连测试端口均仅绑定本机，分别为
+18081/28081 与 18080/28080。启动前确保非 root 容器能读公共配置/jar：
+
+```sh
+chmod 644 target-demo/backend-base-demo.jar demo/nginx.conf demo/observability/*.yaml
+```
+
+实际执行结果与覆盖边界见 [验证记录](../../docs/observability-validation.md)。

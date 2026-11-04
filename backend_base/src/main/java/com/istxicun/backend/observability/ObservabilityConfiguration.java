@@ -10,6 +10,17 @@ import org.springframework.core.task.TaskDecorator;
 
 @Configuration(proxyBeanMethods = false)
 public class ObservabilityConfiguration {
+  /** Boot's exporter-specific switch overrides tracing.enabled; require tracing first. */
+  @Configuration(proxyBeanMethods = false)
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+      prefix = "management.tracing",
+      name = "enabled",
+      havingValue = "true")
+  @org.springframework.context.annotation.Import(
+      org.springframework.boot.actuate.autoconfigure.tracing.otlp.OtlpTracingAutoConfiguration
+          .class)
+  static class TraceExportConfiguration {}
+
   @Bean
   @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
       prefix = "management.tracing",

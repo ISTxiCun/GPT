@@ -117,9 +117,8 @@ HTTP uri 最多 100 值，超过预算拒绝新增对应 meter；采用框架路
 Outbox pending/oldest.age 在投递周期刷新，代表应用库待发送状态，不是 broker 队列深度；
 数据库故障期间保留上次采样，需结合数据库健康判断。
 
-尚待真实环境完成：完整双实例链路核对、Redis OPEN/CLOSED/缓存策略故障、
-MQ 恢复与终止回收、Collector 中断压力、动态 ID 基数压力、长时重试 Link 策略。
-演示探针脚本仅提供可复现记录，不将未运行的矩阵标记为已验收。
+新增的完整双实例观测验收、Collector 中断、指标压力及真实 MQ 追踪结果见
+[验证记录](observability-validation.md)。长时重试 Link 与真实编排摘流仍不在本次保证范围。
 
 
 本次实际验证（JDK 17）：`mvn verify`、`mvn -Predis-it verify`、
@@ -128,4 +127,4 @@ Redis profile 中可选 CacheMysqlIT 未配置 TEST_MYSQL_URL，因此跳过；
 消息 profile 使用真实 MySQL/RabbitMQ。生产 jar 已检查不包含演示类/配置。
 实际启动单实例演示验证 Prometheus 和 readiness，停止 Redis 时 liveness=200、
 readiness=503，重启后 readiness=200。Compose 合并配置及故障脚本语法已检查。
-未运行完整观测 Compose 和其全部故障矩阵，不能将上述回归等同于全矩阵验收。
+后续已运行完整观测 Compose 与断言故障脚本，详见验证记录；不将本地结果等同于生产全场景验收。

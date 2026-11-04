@@ -6,7 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication(
     excludeName = {
       "cn.dev33.satoken.dao.SaTokenDaoForRedisTemplate",
-      "org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration"
+      "org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration",
+      "org.springframework.boot.actuate.autoconfigure.tracing.otlp.OtlpTracingAutoConfiguration"
     })
 public class BackendApplication {
   public static void main(String[] args) {

@@ -20,6 +20,8 @@ exporters:
     sending_queue:
       queue_size: 256
     retry_on_failure:
+      initial_interval: 1s
+      max_interval: 3s
       max_elapsed_time: 10s
 service:
   pipelines:
