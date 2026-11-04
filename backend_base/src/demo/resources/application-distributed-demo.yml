@@ -19,3 +19,9 @@ app:
 demo:
   instance-id: ${INSTANCE_ID:local-demo}
   access-key: ${DEMO_ACCESS_KEY}
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,redis

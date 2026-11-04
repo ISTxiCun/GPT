@@ -24,10 +24,23 @@ public final class RedisRateLimiter {
 
   private final StringRedisTemplate redis;
   private final RedisKeyFactory keys;
+  private final io.micrometer.core.instrument.MeterRegistry metrics;
 
   public RedisRateLimiter(StringRedisTemplate redis, RedisKeyFactory keys) {
+    this(redis, keys, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+  }
+
+  public RedisRateLimiter(
+      StringRedisTemplate redis,
+      RedisKeyFactory keys,
+      io.micrometer.core.instrument.MeterRegistry metrics) {
     this.redis = redis;
     this.keys = keys;
+    this.metrics = metrics;
+  }
+
+  private void count(String result) {
+    metrics.counter("distributed.rate.limit", "result", result).increment();
   }
 
   public void check(
@@ -47,23 +60,30 @@ public final class RedisRateLimiter {
               Long.toString(limit),
               Long.toString(windowSeconds * 1000));
     } catch (DataAccessException ex) {
+      count("backend-failure");
       if (failurePolicy == RateLimit.FailurePolicy.OPEN) {
+        count("open");
         log.warn(
             "Rate limit backend unavailable; explicitly configured OPEN policy allows request");
         return;
       }
       throw DistributedException.unavailable(ex);
     }
-    if (result == null || result.size() != 2)
+    if (result == null || result.size() != 2) {
+      count("backend-failure");
       throw DistributedException.unavailable(
           new IllegalStateException("Invalid rate limit script response"));
-    if (((Number) result.get(0)).longValue() == 0)
+    }
+    if (((Number) result.get(0)).longValue() == 0) {
+      count("rejected");
       throw new DistributedException(
           FailureCategory.RATE_LIMITED,
           "RATE_LIMITED",
           "请求过于频繁",
           Math.max(1, ((Number) result.get(1)).longValue()),
           null);
+    }
+    count("accepted");
   }
 
   public static void validate(String name, long limit, long windowSeconds) {

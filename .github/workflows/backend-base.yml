@@ -85,3 +85,38 @@ jobs:
           cache-dependency-path: backend_base/pom.xml
       - name: Real RabbitMQ and MySQL messaging acceptance
         run: mvn -B -ntp -Pmessaging-it verify
+  observability-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend_base
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: backend_base/pom.xml
+      - name: Generate isolated demo credentials
+        run: |
+          printf 'REDIS_PASSWORD=%s\n' "$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+          printf 'DEMO_ACCESS_KEY=%s\n' "$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+      - name: Build isolated observability demo
+        run: mvn -B -ntp -Pdistributed-demo -DskipTests package
+      - name: Start complete observation stack
+        run: |
+          chmod 644 target-demo/backend-base-demo.jar demo/nginx.conf demo/observability/*.yaml
+          docker compose -p backend-base-demo -f compose.distributed-demo.yaml -f compose.observability-demo.yaml up -d
+      - name: Assert traces, cardinality, collection outage and recovery
+        run: python3 demo/observability/verify.py
+      - name: Save acceptance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-acceptance
+          path: backend_base/target-demo/fault-results/acceptance.json
+      - name: Stop isolated demo
+        if: always()
+        run: docker compose -p backend-base-demo -f compose.distributed-demo.yaml -f compose.observability-demo.yaml down

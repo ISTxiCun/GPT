@@ -34,6 +34,42 @@ public class DemoConfiguration {
     private final String instance;
     private final byte[] accessKey;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.beans.factory.ObjectProvider<io.micrometer.tracing.Tracer> tracer;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.beans.factory.ObjectProvider<
+            org.springframework.core.task.AsyncTaskExecutor>
+        tasks;
+
+    private Map<String, String> context() {
+      var current = tracer.getIfAvailable();
+      var span = current == null ? null : current.currentSpan();
+      org.slf4j.LoggerFactory.getLogger(DemoController.class).info("Observability demo context");
+      return Map.of(
+          "instance",
+          instance,
+          "requestId",
+          java.util.Objects.toString(org.slf4j.MDC.get("requestId"), ""),
+          "traceId",
+          span == null ? "" : span.context().traceId(),
+          "spanId",
+          span == null ? "" : span.context().spanId());
+    }
+
+    @GetMapping("/api/demo/observability/{id}")
+    ApiResponse<Map<String, String>> observation(@PathVariable String id) {
+      return ApiResponse.ok(context());
+    }
+
+    @GetMapping("/api/demo/observability-task")
+    ApiResponse<Map<String, Map<String, String>>> taskObservation() throws Exception {
+      var http = context();
+      var task =
+          tasks.getObject().submit(this::context).get(5, java.util.concurrent.TimeUnit.SECONDS);
+      return ApiResponse.ok(Map.of("http", http, "task", task));
+    }
+
     DemoController(
         com.istxicun.backend.distributed.cache.CacheClient cache,
         LockExecutor locks,

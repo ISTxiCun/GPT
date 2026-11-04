@@ -26,6 +26,8 @@ public final class OutboxDispatcher implements SmartLifecycle {
   private final MessageCodec codec;
   private final MessagePublisher publisher;
   private final MeterRegistry metrics;
+  private volatile double pending;
+  private volatile double oldestAge;
   private ScheduledExecutorService worker;
   private volatile boolean stopping;
   private final JdbcTemplate leaseJdbc;
@@ -48,6 +50,8 @@ public final class OutboxDispatcher implements SmartLifecycle {
     this.codec = codec;
     this.publisher = publisher;
     this.metrics = metrics;
+    metrics.gauge("distributed.messaging.outbox.pending", this, value -> value.pending);
+    metrics.gauge("distributed.messaging.outbox.oldest.age", this, value -> value.oldestAge);
     if (config.leaseMillis() <= (long) p.confirmTimeoutMillis() * config.batchSize() + 1000)
       throw new IllegalArgumentException(
           "Outbox lease must exceed batch confirm budget plus 1000ms");
@@ -127,6 +131,21 @@ public final class OutboxDispatcher implements SmartLifecycle {
     if (org.springframework.transaction.support.TransactionSynchronizationManager
         .isActualTransactionActive())
       throw new IllegalStateException("Dispatch outside database transactions");
+    var backlog =
+        jdbc.queryForMap(
+            "SELECT COUNT(*) AS pending, MIN(created_at) AS oldest FROM infra_message_outbox WHERE"
+                + " scope=? AND status IN ('PENDING','IN_FLIGHT')",
+            scope);
+    pending = ((Number) backlog.get("pending")).doubleValue();
+    Object oldest = backlog.get("oldest");
+    Instant created =
+        oldest instanceof Timestamp t
+            ? t.toInstant()
+            : oldest instanceof java.time.LocalDateTime t
+                ? t.toInstant(java.time.ZoneOffset.UTC)
+                : null;
+    oldestAge =
+        created == null ? 0 : Math.max(0, Duration.between(created, Instant.now()).toSeconds());
     List<Claim> batch = claim();
     if (batch.isEmpty()) return;
     try (var leases = new BatchLeases(batch)) {

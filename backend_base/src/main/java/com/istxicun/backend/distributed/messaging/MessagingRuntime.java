@@ -28,6 +28,11 @@ public final class MessagingRuntime implements SmartLifecycle {
   private final List<MessageHandler<?>> handlers;
   private final List<SimpleMessageListenerContainer> containers = new ArrayList<>();
   private volatile boolean running;
+  private org.springframework.context.ApplicationContext context;
+
+  public void setApplicationContext(org.springframework.context.ApplicationContext context) {
+    this.context = context;
+  }
 
   public MessagingRuntime(
       ConnectionFactory connection,
@@ -69,6 +74,10 @@ public final class MessagingRuntime implements SmartLifecycle {
         declare(admin, handler);
         if (!properties.consumersEnabled()) continue;
         var container = new SimpleMessageListenerContainer(connection);
+        container.setObservationEnabled(true);
+        if (context != null) container.setApplicationContext(context);
+        container.setShutdownTimeout(30000);
+        container.setForceStop(true);
         container.setQueueNames(names.queue(handler.consumerName()));
         container.setAcknowledgeMode(AcknowledgeMode.MANUAL);
         container.setPrefetchCount(properties.prefetch());
@@ -126,6 +135,22 @@ public final class MessagingRuntime implements SmartLifecycle {
   }
 
   private <T> void consume(
+      MessageHandler<T> handler,
+      Message original,
+      Channel channel,
+      SimpleMessageListenerContainer container)
+      throws Exception {
+    long start = System.nanoTime();
+    try {
+      consumeObserved(handler, original, channel, container);
+    } finally {
+      metrics
+          .timer("distributed.messaging.consume.duration")
+          .record(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS);
+    }
+  }
+
+  private <T> void consumeObserved(
       MessageHandler<T> handler,
       Message original,
       Channel channel,

@@ -1,4 +1,6 @@
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 35s
   application:
     name: backend-base
   datasource:
@@ -31,16 +33,52 @@ server:
     include-message: never
     include-stacktrace: never
 management:
+  tracing:
+    enabled: ${TRACING_ENABLED:false}
+    sampling:
+      probability: ${TRACING_SAMPLE_PROBABILITY:0.1}
+    propagation:
+      type: W3C
+    opentelemetry:
+      export:
+        max-queue-size: 1024
+        max-batch-size: 128
+        schedule-delay: 2s
+        timeout: 2s
+    baggage:
+      enabled: false
+      remote-fields: []
+      correlation:
+        fields: []
+  otlp:
+    tracing:
+      export:
+        enabled: ${TRACING_EXPORT_ENABLED:false}
+      endpoint: ${OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+      timeout: 2s
+      connect-timeout: 1s
+  prometheus:
+    metrics:
+      export:
+        enabled: ${PROMETHEUS_ENABLED:false}
   server:
     port: ${MANAGEMENT_PORT:8081}
     address: ${MANAGEMENT_ADDRESS:127.0.0.1}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: ${MANAGEMENT_ENDPOINTS:health,info}
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,redis
+          additional-path: server:/readyz
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
   configuration:
@@ -122,4 +160,4 @@ app:
     max-age-seconds: 3600
 logging:
   pattern:
-    level: '%5p [requestId=%X{requestId:-}]'
+    level: '%5p [requestId=%X{requestId:-} traceId=%X{traceId:-} spanId=%X{spanId:-}]'

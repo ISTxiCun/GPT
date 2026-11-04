@@ -125,7 +125,7 @@ public final class CacheClient {
       if (!fallback.tryAcquire()) throw failure("CACHE_FALLBACK_BUSY", null);
       try {
         count("fallback");
-        return loader.get();
+        return timedLoad(loader);
       } finally {
         fallback.release();
       }
@@ -152,6 +152,7 @@ public final class CacheClient {
       if (acquired[0] || !ex.getCode().equals("LOCK_BUSY")) throw ex;
       CacheResult<T> last = readForLoad(key, type);
       if (last.hit()) return last.value();
+      count("load-timeout");
       throw failure("CACHE_LOAD_TIMEOUT", ex);
     }
   }
@@ -177,7 +178,7 @@ public final class CacheClient {
   private <T> T load(CacheKey key, CacheType<T> type, CachePolicy policy, Supplier<T> loader) {
     requireCommittedRead();
     count("load");
-    T value = loader.get(); // Exceptions propagate; never turn failures into negative entries.
+    T value = timedLoad(loader);
     requireCommittedRead();
     String raw;
     try {
@@ -202,6 +203,17 @@ public final class CacheClient {
       LOG.warn("Cache write failed", ex);
     }
     return value;
+  }
+
+  private <T> T timedLoad(Supplier<T> loader) {
+    long start = System.nanoTime();
+    try {
+      return loader.get();
+    } finally {
+      metrics
+          .timer("distributed.cache.load")
+          .record(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS);
+    }
   }
 
   private void requireCommittedRead() {

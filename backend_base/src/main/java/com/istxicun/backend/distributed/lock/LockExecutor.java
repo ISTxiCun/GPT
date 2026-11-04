@@ -16,10 +16,23 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public final class LockExecutor {
   private final RedissonClient redisson;
   private final RedisKeyFactory keys;
+  private final io.micrometer.core.instrument.MeterRegistry metrics;
 
   public LockExecutor(RedissonClient redisson, RedisKeyFactory keys) {
+    this(redisson, keys, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+  }
+
+  public LockExecutor(
+      RedissonClient redisson,
+      RedisKeyFactory keys,
+      io.micrometer.core.instrument.MeterRegistry metrics) {
     this.redisson = redisson;
     this.keys = keys;
+    this.metrics = metrics;
+  }
+
+  private void count(String result) {
+    metrics.counter("distributed.lock", "result", result).increment();
   }
 
   public <T> T execute(String logicalKey, Duration waitTime, Supplier<T> action) {
@@ -33,16 +46,27 @@ public final class LockExecutor {
           "Acquire lock outside a transaction; call a separate transactional service inside the"
               + " callback");
     RLock lock = redisson.getLock(keys.key("lock", logicalKey));
+    long waitStart = System.nanoTime();
     try {
-      if (!lock.tryLock(waitTime.toMillis(), TimeUnit.MILLISECONDS))
+      if (!lock.tryLock(waitTime.toMillis(), TimeUnit.MILLISECONDS)) {
+        count("busy");
         throw new DistributedException(FailureCategory.CONFLICT, "LOCK_BUSY", "操作正在处理中，请稍后重试");
+      }
+      count("acquired");
     } catch (InterruptedException ex) {
+      count("interrupted");
       Thread.currentThread().interrupt();
       throw new DistributedException(
           FailureCategory.UNAVAILABLE, "LOCK_INTERRUPTED", "等待锁被中断", null, ex);
     } catch (RedisException ex) {
+      count("backend-failure");
       throw DistributedException.unavailable(ex);
+    } finally {
+      metrics
+          .timer("distributed.lock.wait")
+          .record(System.nanoTime() - waitStart, TimeUnit.NANOSECONDS);
     }
+    long holdStart = System.nanoTime();
     Throwable primary = null;
     try {
       return action.get();
@@ -50,10 +74,14 @@ public final class LockExecutor {
       primary = ex;
       throw ex;
     } finally {
+      metrics
+          .timer("distributed.lock.hold")
+          .record(System.nanoTime() - holdStart, TimeUnit.NANOSECONDS);
       try {
         lock.unlock();
       } // Redisson checks thread ownership atomically; never forceUnlock.
       catch (RuntimeException ex) {
+        count("release-failure");
         if (primary != null) primary.addSuppressed(ex);
         else
           throw new DistributedException(

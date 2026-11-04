@@ -70,8 +70,11 @@ public class DistributedConfiguration {
 
   @Bean
   @ConditionalOnProperty(prefix = "app.distributed.lock", name = "enabled", havingValue = "true")
-  LockExecutor lockExecutor(RedissonClient distributedRedisson, RedisKeyFactory keys) {
-    return new LockExecutor(distributedRedisson, keys);
+  LockExecutor lockExecutor(
+      RedissonClient distributedRedisson,
+      RedisKeyFactory keys,
+      io.micrometer.core.instrument.MeterRegistry metrics) {
+    return new LockExecutor(distributedRedisson, keys, metrics);
   }
 
   @Bean
@@ -79,8 +82,11 @@ public class DistributedConfiguration {
       prefix = "app.distributed.rate-limit",
       name = "enabled",
       havingValue = "true")
-  RedisRateLimiter redisRateLimiter(StringRedisTemplate redis, RedisKeyFactory keys) {
-    return new RedisRateLimiter(redis, keys);
+  RedisRateLimiter redisRateLimiter(
+      StringRedisTemplate redis,
+      RedisKeyFactory keys,
+      io.micrometer.core.instrument.MeterRegistry metrics) {
+    return new RedisRateLimiter(redis, keys, metrics);
   }
 
   @Bean
@@ -88,7 +94,10 @@ public class DistributedConfiguration {
       prefix = "app.distributed.submission",
       name = "enabled",
       havingValue = "true")
-  SubmissionGuard submissionGuard(StringRedisTemplate redis, RedisKeyFactory keys) {
-    return new SubmissionGuard(redis, keys);
+  SubmissionGuard submissionGuard(
+      StringRedisTemplate redis,
+      RedisKeyFactory keys,
+      io.micrometer.core.instrument.MeterRegistry metrics) {
+    return new SubmissionGuard(redis, keys, metrics);
   }
 }

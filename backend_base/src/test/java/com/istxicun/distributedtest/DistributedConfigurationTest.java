@@ -32,6 +32,10 @@ class DistributedConfigurationTest {
       new ApplicationContextRunner()
           .withConfiguration(
               AutoConfigurations.of(
+                  org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration
+                      .class,
+                  org.springframework.boot.actuate.autoconfigure.metrics.export.simple
+                      .SimpleMetricsExportAutoConfiguration.class,
                   ConfigurationPropertiesAutoConfiguration.class,
                   ValidationAutoConfiguration.class))
           .withUserConfiguration(
