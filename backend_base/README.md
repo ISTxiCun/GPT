@@ -2,7 +2,7 @@
 
 **面向分布式应用开发的模块化后端脚手架，提供按需启用、开箱即用的分布式基础能力。**
 
-通过统一配置、可复用组件和可运行的双实例环境，将共享会话、分布式锁、接口限流与短窗口防重复提交接入业务开发流程，减少多实例应用中重复的基础设施建设。
+通过统一配置、可复用组件和可运行的双实例环境，将共享会话、分布式锁、接口限流、短窗口防重复提交、显式缓存及异步消息接入业务开发流程，减少多实例应用中重复的基础设施建设。
 
 以模块化单体作为开发起点：单 Maven 模块、一个启动入口，业务按包组织，同一应用可部署多个实例。业务模块通过公共 API 和注解使用分布式能力，后续可根据业务边界演进为独立服务。
 
@@ -14,12 +14,15 @@
 | 分布式锁 | 注入 `LockExecutor` | 有限等待、看门狗续期和锁释放处理 |
 | 接口限流 | Controller 方法添加 `@RateLimit` | 用户、IP、全局维度的跨实例计数 |
 | 短窗口防重复提交 | 添加 `@PreventDuplicateSubmission`，前端传递请求标识 | 在约定窗口内原子拦截重复提交 |
+| V2 显式缓存 | `CacheClient`、`CacheType`、`CachePolicy` | 泛型三态读取、TTL 抖动、空值缓存、热点加载保护和提交后失效 |
+| V3 可靠消息 | `MessagePublisher`、`MessageHandler<T>` | RabbitMQ confirm/return、手动 ACK、有界重试、失败隔离和受控重放 |
+| JDBC 消费幂等与可选 Outbox | `JdbcConsumerIdempotency`、`OutboxWriter` | 同库事务幂等记录、发送意图落库、令牌隔离和批次租约续期 |
 | 开发基础 | Web、参数校验、统一异常、分页、数据库迁移、接口文档 | 建立一致的接口与数据访问规范 |
 | 双实例验收 | 独立 Compose 环境和验证脚本 | 实际验证会话共享、限流、防重与锁竞争 |
 
-锁、限流和防重默认关闭，可按项目需要分别开启；开启并完成配置后，业务模块即可调用。账号体系、权限数据和业务流程由项目定义，接入方式见第 7、11 节。默认工程的业务模块由开发者扩展，独立演示提供验证分布式行为所需的接口。
+锁、限流、防重、缓存、消息、消费者和 Outbox 默认关闭，可按项目需要分别开启；开启并完成配置后，业务模块即可调用。账号体系、权限数据和业务流程由项目定义，接入方式见第 7、11 节。默认工程的业务模块由开发者扩展，独立演示提供验证分布式行为所需的接口。
 
-“开箱即用”指公共能力、配置和验证环境已配套提供。库存一致性、支付幂等等业务结果，仍需结合数据库约束、事务和业务状态机设计。当前已交付 V1；V2 缓存、V3 可靠异步处理、V4 运行与观测处于规划阶段，进度见[开发路线图](docs/distributed-roadmap.md)。
+“开箱即用”指公共能力、配置和验证环境已配套提供。库存一致性、支付幂等等业务结果，仍需结合数据库约束、事务和业务状态机设计。当前已实现 V1～V3；V4 运行观测及模块生成器仍处于规划阶段，进度见[开发路线图](docs/distributed-roadmap.md)。
 
 ## 技术基线
 
@@ -30,6 +33,7 @@
 | 数据访问 | MyBatis-Plus、MySQL、Flyway |
 | 共享状态与并发协调 | Redis、Redisson |
 | 身份认证 | Sa-Token |
+| 可选消息适配 | RabbitMQ 4.1 quorum 队列、Spring AMQP 3.2.8（Boot BOM 管理） |
 
 项目根目录为 `backend_base`，Maven、Compose 及验证脚本均在该目录执行。
 
@@ -39,7 +43,9 @@
 - [分布式能力使用](#11-分布式基础能力)：开启配置、在业务模块中调用。
 - [先体验分布式效果](#12-双实例演示)：启动两个应用实例，运行自动验收脚本。
 - [分布式详细说明](docs/distributed.md)：算法、异常、事务顺序、代理 IP 和使用限制。
-- [后续开发路线图](docs/distributed-roadmap.md)：V2 缓存、V3 异步处理、V4 运行观测的实现计划（尚未实现）。
+- [V2 显式缓存](#114-v2-显式缓存)：读取策略、事务限制和故障回源。
+- [V3 可靠消息](#115-v3-可靠异步消息)：显式迁移、消费幂等、Outbox 和演示入口。
+- [开发路线图](docs/distributed-roadmap.md)：V1～V3 的交付状态及 V4 后续计划。
 - [快速生成模块规划](docs/module-generator.md)：18 类可选业务模板、功能勾选与生成流程设计（尚未实现）。
 - [架构保护与迁移](docs/architecture-guardrails.md)：会话隔离、错误分层、跨域扩展和自动回归规则。
 - [脚手架文档导航](docs/README.md)：当前功能与未来计划的统一入口。
@@ -125,6 +131,8 @@ curl -i http://127.0.0.1:8081/actuator/health
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` |
 | `REDIS_PASSWORD` | 必填；已有无密码 Redis 可显式设为空，仅限合适的本地环境 |
 | `REDIS_DATABASE` | `0` |
+| `RABBITMQ_HOST` / `RABBITMQ_PORT` / `RABBITMQ_VHOST` | `localhost` / `5672` / `/`；只在开启消息时使用 |
+| `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | 开启消息时必填，无默认凭据；在自己的 `.env` 或部署环境中另行设置 |
 | `SERVER_PORT` | `8080` |
 | `MANAGEMENT_PORT` | `8081` |
 | `MANAGEMENT_ADDRESS` | `127.0.0.1` |
@@ -147,16 +155,18 @@ backend_base/
 │   ├── BackendApplication.java
 │   ├── common/                  # 响应、分页、异常
 │   ├── config/                  # Web、认证、Redis、MP、文档、请求 ID
-│   ├── distributed/             # 分布式公共组件：锁、限流、防重
+│   ├── distributed/             # 分布式公共组件：锁、限流、防重、缓存、消息
 │   └── modules/                 # 按业务边界扩展功能模块
 ├── src/main/resources/
 │   ├── application.yml
 │   ├── application-dev.yml
-│   └── db/migration/            # Flyway SQL
+│   ├── db/migration/            # 默认 Flyway 迁移位置
+│   └── db/messaging/            # 显式启用的消息幂等及 Outbox 迁移
 ├── src/demo/                    # 独立 profile 编译的演示代码
 ├── src/test/
 ├── compose.yaml                 # 日常开发：MySQL、Redis
-├── compose.distributed-demo.yaml # 独立演示：Redis、双实例、Nginx
+├── compose.distributed-demo.yaml # V1/V2 演示：Redis、双实例、Nginx
+├── compose.messaging-demo.yaml   # V3 演示基础设施：RabbitMQ、MySQL、Redis
 ├── demo/nginx.conf
 ├── scripts/verify_distributed.py
 ├── docs/distributed.md
@@ -272,11 +282,44 @@ java -jar target/backend-base-0.0.1-SNAPSHOT.jar
 
 测试使用仅测试范围的 H2，不需要本地 MySQL/Redis；覆盖应用上下文启动、未登录拦截、公开接口、参数校验、CORS 预检与拒绝、错误响应及默认文档关闭。测试 Controller 只存在于 `src/test`，不会打进生产包。
 
-配置测试还覆盖功能默认关闭、环境必填、注解误用拒绝启动与可信代理解析。`mvn -Predis-it clean verify` 可运行真实 Redis 集成测试，详见 [分布式文档](docs/distributed.md#6-真实-redis-集成测试)。
+配置测试还覆盖功能默认关闭、环境必填、注解误用拒绝启动与可信代理解析，以及缓存事务限制、降级路径、消息契约和队列命名约束。`mvn -Predis-it clean verify` 可运行真实 Redis 集成测试，详见 [分布式文档](docs/distributed.md#6-真实-redis-集成测试)。
 
 默认测试还包含架构边界、会话配置保护、CORS 扩展与 HTTP 错误映射检查。真实 Redis 测试使用独立 JVM 验证共享会话及跨项目/环境隔离；GitHub Actions 自动执行这些回归规则。
 
-基础测试不替代真实 MySQL/Redis 验证；新增业务后应补充真实数据库、迁移和 Sa-Token 登录/退出/权限测试。H2 不保证 MySQL 特有 SQL 兼容。
+真实服务验收分开执行：
+
+| 命令（在 `backend_base` 下执行） | 依赖与覆盖 |
+|---|---|
+| `mvn verify` | 默认单元、配置、架构与 H2 回归；无需真实中间件 |
+| `mvn -Predis-it verify` | 真实 Redis：V1、独立 JVM 会话隔离、V2 热点/过期/故障降级；设置 `TEST_MYSQL_URL` 后还运行缓存 MySQL 事务测试 |
+| `mvn -Pmessaging-it verify` | 真实 RabbitMQ 与专用 MySQL：发布、重试、隔离重放、幂等、ACK 前崩溃、Outbox 续租和恢复 |
+| `mvn -Pdistributed-demo package -DskipTests` | 编译隔离演示与运维 CLI，不代替上述验收 |
+
+测试 Redis 用 `TEST_REDIS_HOST/PORT/PASSWORD/DATABASE`，示例：
+
+```bash
+export TEST_REDIS_HOST=127.0.0.1
+export TEST_REDIS_PORT=6379
+export TEST_REDIS_PASSWORD="$REDIS_PASSWORD"
+mvn -Predis-it verify
+```
+
+缓存数据库验收和消息验收使用 `TEST_MYSQL_URL/USER/PASSWORD`；消息 broker 使用
+`TEST_RABBIT_HOST/PORT/USER/PASSWORD`。先准备专用测试数据库并授权给测试用户，再配置实际连接信息：
+
+```bash
+export TEST_MYSQL_URL='jdbc:mysql://127.0.0.1:3306/backend_base_test?allowPublicKeyRetrieval=true&useSSL=false'
+# TEST_MYSQL_USER 和 TEST_MYSQL_PASSWORD 设为该专用测试库的实际凭据。
+# TEST_RABBIT_USER 和 TEST_RABBIT_PASSWORD 设为测试 broker 的实际凭据。
+# 非本机服务同时设置 TEST_RABBIT_HOST / TEST_RABBIT_PORT。
+mvn -Pmessaging-it verify
+# 若也要执行缓存的 MySQL 事务验收，保持上述 TEST_MYSQL_* 后另行执行：
+mvn -Predis-it verify
+```
+
+以上 URL 的明文连接仅用于本机测试。消息测试会在专用测试库显式执行独立迁移，不能指向生产库。
+GitHub Actions 分别运行真实 Redis 回归和 RabbitMQ/MySQL 消息验收，再检查默认包与演示包隔离。
+基础测试不替代真实依赖验证；新增业务后继续补充迁移和登录/退出/权限测试。H2 不保证 MySQL 特有 SQL 兼容。
 
 ## 10. Docker 运行应用
 
@@ -297,7 +340,7 @@ docker run --rm --name backend-base-app \
 
 ## 11. 分布式基础能力
 
-V1 将跨实例协作所需的公共机制集中在 `com.istxicun.backend.distributed`。业务模块通过配置、注解和显式 API 接入，各应用实例共同使用 Redis 完成状态共享与并发协调。
+V1～V3 将跨实例协作所需的公共机制集中在 `com.istxicun.backend.distributed`。业务模块通过配置、注解和显式 API 接入，V1/V2 使用共享 Redis，V3 使用 RabbitMQ 及按需启用的 MySQL 基础表。
 
 | 能力 | 入口 | 默认行为 |
 |---|---|---|
@@ -382,6 +425,74 @@ await api.post('/resources', payload, {
 
 **将公共机制与业务约束配合使用。** 锁与数据库条件更新、唯一约束共同控制关键写入；下单、支付等持久业务幂等还需业务流水或状态机。完整语义、错误码和可信代理配置见 [分布式详细说明](docs/distributed.md)。
 
+### 11.4 V2 显式缓存
+
+通过 `app.distributed.cache.enabled=true` 创建 `CacheClient`；需要热点保护时同时开启
+`app.distributed.cache.protect-loads=true` 和 `app.distributed.lock.enabled=true`。
+复用现有 Redis 连接和 `app.identity`，不引入本地二级缓存或缓存注解。
+
+```java
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.istxicun.backend.distributed.cache.*;
+import java.util.List;
+
+// cache 为注入的 CacheClient；ProductView、tenantId/productId 和 productService 由业务定义。
+var key = new CacheKey("products", "v1", tenantId + ":" + productId);
+var type = CacheType.of(new TypeReference<List<ProductView>>() {});
+List<ProductView> value = cache.getOrLoad(key, type, () -> productService.findViews(productId));
+```
+
+- `get` 返回 MISS / NULL / VALUE 三态；空列表、0、false 与空值分别保留。默认正值 TTL 为 300 秒，抖动 ±30 秒，空值 TTL 为 10 秒。
+- Key 必须包含业务所需租户/用户范围；结构变化升级 Key 的版本，不能把哈希当作授权。
+- 缓存未命中时，活动数据库事务内的回填会被拒绝。将 `getOrLoad` 放在外层事务之外，loader 内部的读取事务在返回前提交；已有缓存命中仍可读取。
+- 更新数据库后，在同一事务内登记 `cache.evictAfterCommit(key)`；提交后删除、回滚不删除，无事务则立即删除。仍存在旧读回填、进程崩溃等窗口，不提供强一致保证。
+- `fallback-on-read-failure` 默认关闭。显式开启后覆盖首次读取、锁内二次读取和等待锁后的最终读取；先释放加载锁，再按 `fallback-concurrency` 限额回源。loader、锁和释放锁错误不无条件重试。
+
+完整参数、错误码、真实测试及缓存双实例演示见 [V2 使用说明](docs/distributed-v2-cache.md)。
+
+### 11.5 V3 可靠异步消息
+
+使用 RabbitMQ 4.1 quorum 队列。`enabled`、`consumers-enabled`、`outbox.enabled` 分别控制消息适配、消费者和后台投递，默认均关闭。启用后显式设置 `RABBITMQ_USERNAME/PASSWORD`；默认开发 Compose 不启动 RabbitMQ，可另用 [消息演示 Compose](compose.messaging-demo.yaml)，注意它与开发环境占用相同端口，择一运行。
+
+```java
+// codec / publisher 为注入的 MessageCodec / MessagePublisher；productId 由业务定义。
+var envelope = codec.create("inventory.changed", 1, java.util.Map.of("productId", productId));
+var result = publisher.publish(envelope); // 在本地数据库事务外调用
+```
+
+只有 `result.confirmed()` 才表示 broker 接收且没有 mandatory return，不表示业务已消费。
+UNKNOWN 表示发送结果未知，重试须复用同一 envelope/messageId。`confirm-timeout-millis`
+只限制发送返回后的确认等待，不是端到端截止时间。
+
+业务通过 `MessageHandler<T>` Bean 声明消费组、eventType、schemaVersion 和明确的 DTO 类型。
+同步处理并提交本地事务后才 ACK；失败进入有界重试或失败队列，转发确认后才 ACK 原消息。
+`consumerName` 不能以 `.failed` 或 `.retry.<数字>` 结尾；普通点号名称如 `orders.projection` 可用。
+
+同库业务可显式构造 `JdbcConsumerIdempotency`，在其事务回调中提交业务变更和消费记录。
+需要业务更新与发送意图一同落库时，在同一 DataSource 的活动事务内调用 `OutboxWriter.append(envelope)`；
+不能以 afterCommit 直接发 MQ 代替可靠发送意图。
+JDBC 消费幂等或 Outbox 需要显式增加独立迁移位置，例如：
+
+```yaml
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/messaging
+app:
+  distributed:
+    messaging:
+      enabled: true
+      consumers-enabled: true
+      outbox:
+        enabled: true
+```
+
+Outbox 使用 MySQL 8 行锁/`SKIP LOCKED` 领取，在连接、发送及批次排队期间按领取令牌续租；
+过期租约不能被旧持有者复活。续租失败停止该批后续发布，进程退出后由租约过期恢复。
+长时间 JVM 暂停或数据库故障仍可能产生重复，业务幂等不可省略；不保证 exactly-once 或全局顺序。
+
+迁移会持久创建基础表，关闭开关不删表。失败重放、迁移回滚、TLS、隔离演示及运维 CLI 的步骤见
+[V3 使用说明](docs/distributed-v3-messaging.md)。演示和 CLI 只由 `distributed-demo` 构建，不进入默认生产包。
+
 ## 12. 双实例演示
 
 通过独立演示，可在业务开发前验证分布式能力的实际效果。Compose 会启动 Redis、两个应用实例和 Nginx；演示 profile 关闭数据库/Flyway 自动配置，可直接执行本节步骤。业务开发环境按第 2、3 节使用 MySQL 和 Redis。
@@ -450,28 +561,17 @@ mvn -Predis-it clean verify
 | 阶段 | 方向 | 当前状态 |
 |---|---|---|
 | V1 | 共享会话接入、分布式锁、限流、短窗口防重和双实例验收 | 已实现 |
-| V2 | 缓存入口、TTL 策略、空值缓存、热点加载保护 | 规划中 |
-| V3 | 可靠异步处理、消费幂等扩展、可选 Outbox | 规划中 |
+| V2 | 缓存入口、TTL 策略、空值缓存、热点加载保护 | 已实现 |
+| V3 | 可靠异步处理、消费幂等扩展、可选 Outbox | 已实现 |
 | V4 | 指标、链路、健康探针、停机与故障验证 | 规划中 |
 
-V2～V4 的接口、实施顺序和验收标准记录在[开发路线图](docs/distributed-roadmap.md)，实现进度以代码与对应阶段文档为准。
+V1～V3 的交付状态及 V4 的后续安排记录在[开发路线图](docs/distributed-roadmap.md)，实现进度以代码与对应阶段文档为准。
 
 多实例部署时，各实例保持一致的会话与共享组件配置，需要共享的状态放在相应外部服务中。业务模块负责数据归属、权限、事务、持久幂等和状态流转；脚手架负责提供可复用的分布式机制及接入方式。两者共同构成可验证的业务实现。
 
-### V2 显式缓存
+## 15. 修改与提交 PR
 
-已提供 [CacheClient 使用与故障语义](docs/distributed-v2-cache.md)。
-默认关闭，通过 `app.distributed.cache.enabled` 开启，热点保护需要同时开启 V1 锁。
-缓存未命中时须在活动事务外回填；loader 内部事务应在返回前提交。
-支持泛型三态读取、TTL 抖动、空值缓存、有界热点加载和提交后失效；不提供强一致保证。
-显式开启的读故障降级覆盖首次、锁内及等待锁后的读取，降级回源在释放加载锁后受并发预算约束。
-
-### V3 可靠异步消息
-
-[消息接入、迁移、失败恢复与演示](docs/distributed-v3-messaging.md)提供 RabbitMQ 4.1 quorum 队列、
-confirm/return 发布结果、手动 ACK、有界重试、授权审计重放、MySQL 消费幂等与可选 Outbox。
-Outbox 在连接、发送及批次排队期间按领取令牌续租；确认等待时间不是完整发送的耗时上限。
-`app.distributed.messaging.enabled`、`consumers-enabled` 和 `outbox.enabled` 均默认关闭；
-启用 JDBC 能力须显式增加 `classpath:db/messaging` 迁移位置。语义为至少一次，业务负责幂等。
-消费者名称不能以 `.failed` 或 `.retry.<数字>` 结尾，避免与内部队列碰撞。
-验证用 `mvn -Pmessaging-it verify`，演示依赖见 `compose.messaging-demo.yaml`。
+按 [仓库 AGENTS.md](../AGENTS.md) 和 [后端约束](AGENTS.md) 开发：从最新 `main` 创建独立分支，
+完成相应验证后提交、推送并创建 PR。多个独立问题分别提 PR，说明行为变化、测试结果及迁移影响。
+维护者决定是否合并；不直接推送 `main`、不自行合并或开启自动合并。
+纯文档改动检查链接、锚点和示例与实际配置/API 的一致性即可，不要求无关的 Maven 回归。
