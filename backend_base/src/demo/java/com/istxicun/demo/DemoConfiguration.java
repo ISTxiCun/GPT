@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class DemoConfiguration {
   @RestController
   static class DemoController {
+    private final com.istxicun.backend.distributed.cache.CacheClient cache;
     private final LockExecutor locks;
     private final StringRedisTemplate redis;
     private final RedisKeyFactory keys;
@@ -34,6 +35,7 @@ public class DemoConfiguration {
     private final byte[] accessKey;
 
     DemoController(
+        com.istxicun.backend.distributed.cache.CacheClient cache,
         LockExecutor locks,
         StringRedisTemplate redis,
         RedisKeyFactory keys,
@@ -41,6 +43,7 @@ public class DemoConfiguration {
         @Value("${demo.access-key}") String accessKey) {
       if (accessKey.isBlank())
         throw new IllegalArgumentException("DEMO_ACCESS_KEY must not be blank");
+      this.cache = cache;
       this.locks = locks;
       this.redis = redis;
       this.keys = keys;
@@ -56,6 +59,19 @@ public class DemoConfiguration {
       StpUtil.login(user);
       return ApiResponse.ok(
           Map.of("token", StpUtil.getTokenValue(), "user", user, "instance", instance));
+    }
+
+    @GetMapping("/api/demo/cache")
+    ApiResponse<Map<String, String>> cache() {
+      var key =
+          new com.istxicun.backend.distributed.cache.CacheKey(
+              "demo", "v1", StpUtil.getLoginIdAsString());
+      String loadedBy =
+          cache.getOrLoad(
+              key,
+              com.istxicun.backend.distributed.cache.CacheType.of(String.class),
+              () -> instance);
+      return ApiResponse.ok(Map.of("instance", instance, "loadedBy", loadedBy));
     }
 
     @GetMapping("/api/demo/me")

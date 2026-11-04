@@ -7,6 +7,9 @@ app:
   identity:
     environment: ${APP_ENV:demo}
   distributed:
+    cache:
+      enabled: true
+      protect-loads: true
     lock:
       enabled: true
     rate-limit:

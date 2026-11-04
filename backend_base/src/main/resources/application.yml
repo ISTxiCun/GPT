@@ -79,6 +79,17 @@ app:
       enabled: false
     submission:
       enabled: false
+    cache:
+      enabled: false
+      ttl-millis: 300000
+      null-ttl-millis: 10000
+      jitter-millis: 30000
+      load-wait-millis: 1000
+      protect-loads: false
+      fallback-on-read-failure: false
+      fallback-concurrency: 8
+      max-payload-bytes: 1048576
+      evict-invalid: true
     trusted-proxies: []
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}

@@ -12,6 +12,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 public record DistributedProperties(
     @Valid @DefaultValue Lock lock,
+    @Valid @DefaultValue com.istxicun.backend.distributed.cache.CacheProperties cache,
     @Valid @DefaultValue Feature rateLimit,
     @Valid @DefaultValue Feature submission,
     List<String> trustedProxies) {

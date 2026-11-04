@@ -35,7 +35,9 @@ class DistributedConfigurationTest {
                   ConfigurationPropertiesAutoConfiguration.class,
                   ValidationAutoConfiguration.class))
           .withUserConfiguration(
-              DistributedConfiguration.class, ApplicationIdentityConfiguration.class)
+              DistributedConfiguration.class,
+              com.istxicun.backend.distributed.cache.CacheConfiguration.class,
+              ApplicationIdentityConfiguration.class)
           .withPropertyValues("app.identity.environment=test");
 
   public static class Endpoints {
@@ -76,6 +78,29 @@ class DistributedConfigurationTest {
               .doesNotHaveBean(RedisRateLimiter.class)
               .doesNotHaveBean(SubmissionGuard.class);
         });
+  }
+
+  @Test
+  void cacheValidatesPoliciesAndLockDependency() {
+    runner
+        .withPropertyValues("app.distributed.cache.ttl-millis=0")
+        .run(ctx -> assertThat(ctx).hasFailed());
+    runner
+        .withPropertyValues(
+            "app.distributed.cache.enabled=true", "app.distributed.cache.protect-loads=true")
+        .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
+        .withBean(
+            com.fasterxml.jackson.databind.ObjectMapper.class,
+            com.fasterxml.jackson.databind.ObjectMapper::new)
+        .withBean(
+            io.micrometer.core.instrument.MeterRegistry.class,
+            io.micrometer.core.instrument.simple.SimpleMeterRegistry::new)
+        .run(
+            ctx ->
+                assertThat(ctx)
+                    .hasFailed()
+                    .getFailure()
+                    .hasStackTraceContaining("requires app.distributed.lock.enabled"));
   }
 
   @Test
