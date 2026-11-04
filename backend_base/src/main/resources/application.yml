@@ -108,6 +108,7 @@ app:
         enabled: false
         poll-millis: 1000
         batch-size: 10
+        # 投递期间按领取令牌续租；confirm-timeout 不包含连接和发送耗时。
         lease-millis: 60000
         max-attempts: 10
     trusted-proxies: []

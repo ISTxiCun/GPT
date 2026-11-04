@@ -27,6 +27,8 @@ public final class OutboxDispatcher implements SmartLifecycle {
   private final MessagePublisher publisher;
   private final MeterRegistry metrics;
   private ScheduledExecutorService worker;
+  private volatile boolean stopping;
+  private final JdbcTemplate leaseJdbc;
 
   public OutboxDispatcher(
       DataSource source,
@@ -41,6 +43,8 @@ public final class OutboxDispatcher implements SmartLifecycle {
         org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     scope = identity.namespace() + ":" + identity.environment();
     config = p.outbox();
+    leaseJdbc = new JdbcTemplate(source);
+    leaseJdbc.setQueryTimeout(Math.max(1, config.leaseMillis() / 3000));
     this.codec = codec;
     this.publisher = publisher;
     this.metrics = metrics;
@@ -123,18 +127,98 @@ public final class OutboxDispatcher implements SmartLifecycle {
     if (org.springframework.transaction.support.TransactionSynchronizationManager
         .isActualTransactionActive())
       throw new IllegalStateException("Dispatch outside database transactions");
-    for (var claim : claim()) {
-      if (Thread.currentThread().isInterrupted()) return;
-      boolean confirmed = false;
-      try {
-        confirmed =
-            publisher
-                .publish(codec.decode(claim.body().getBytes(StandardCharsets.UTF_8)))
-                .confirmed();
-      } catch (RuntimeException ex) {
-        LoggerFactory.getLogger(getClass()).warn("Outbox publication failed", ex);
+    List<Claim> batch = claim();
+    if (batch.isEmpty()) return;
+    try (var leases = new BatchLeases(batch)) {
+      for (var claim : batch) {
+        if (Thread.currentThread().isInterrupted() || stopping) return;
+        // Verify ownership immediately before publishing. Never resurrect an already expired lease.
+        if (!leases.owned(claim)) continue;
+        boolean confirmed = false;
+        try {
+          confirmed =
+              publisher
+                  .publish(codec.decode(claim.body().getBytes(StandardCharsets.UTF_8)))
+                  .confirmed();
+        } catch (RuntimeException ex) {
+          LoggerFactory.getLogger(getClass()).warn("Outbox publication failed", ex);
+        }
+        leases.finished(claim);
+        complete(claim, confirmed);
       }
-      complete(claim, confirmed);
+    }
+  }
+
+  /** Renews both the current publication and tasks waiting behind it in the claimed batch. */
+  private final class BatchLeases implements AutoCloseable {
+    private final ConcurrentMap<String, Claim> active = new ConcurrentHashMap<>();
+    private final Thread owner = Thread.currentThread();
+    private final java.util.concurrent.atomic.AtomicBoolean healthy =
+        new java.util.concurrent.atomic.AtomicBoolean(true);
+    private final ScheduledExecutorService timer =
+        Executors.newSingleThreadScheduledExecutor(
+            task -> {
+              var thread = new Thread(task, "outbox-lease-renewal");
+              thread.setDaemon(true);
+              return thread;
+            });
+
+    BatchLeases(List<Claim> claims) {
+      claims.forEach(claim -> active.put(claim.id(), claim));
+      long interval = Math.max(100, config.leaseMillis() / 3);
+      timer.scheduleWithFixedDelay(this::renew, interval, interval, TimeUnit.MILLISECONDS);
+    }
+
+    boolean owned(Claim claim) {
+      if (!healthy.get() || !active.containsKey(claim.id())) return false;
+      try {
+        int updated =
+            leaseJdbc.update(
+                "UPDATE infra_message_outbox SET"
+                    + " lease_until=TIMESTAMPADD(MICROSECOND,?,CURRENT_TIMESTAMP(3)) WHERE scope=?"
+                    + " AND message_id=? AND status='IN_FLIGHT' AND claim_token=? AND"
+                    + " lease_until>CURRENT_TIMESTAMP(3)",
+                (long) config.leaseMillis() * 1000,
+                scope,
+                claim.id(),
+                claim.token());
+        if (updated == 1) return true;
+        if (active.remove(claim.id(), claim))
+          metrics.counter("distributed.messaging.outbox", "result", "lease-lost").increment();
+      } catch (RuntimeException ex) {
+        healthy.set(false);
+        active.clear();
+        timer.shutdown();
+        LoggerFactory.getLogger(OutboxDispatcher.class)
+            .error(
+                "Outbox lease renewal failed; no further tasks in this batch will be published",
+                ex);
+      }
+      return false;
+    }
+
+    private void renew() {
+      if (!owner.isAlive() || owner.isInterrupted() || stopping) {
+        healthy.set(false);
+        active.clear();
+        timer.shutdown();
+        return;
+      }
+      for (var claim : active.values()) {
+        if (!healthy.get()) return;
+        owned(claim);
+      }
+    }
+
+    void finished(Claim claim) {
+      active.remove(claim.id(), claim);
+    }
+
+    @Override
+    public void close() {
+      healthy.set(false);
+      active.clear();
+      timer.shutdownNow();
     }
   }
 
@@ -152,6 +236,7 @@ public final class OutboxDispatcher implements SmartLifecycle {
   @Override
   public synchronized void start() {
     if (worker != null) return;
+    stopping = false;
     jdbc.queryForObject(
         "SELECT COUNT(*) FROM infra_message_outbox WHERE scope=?", Long.class, scope);
     worker = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "message-outbox"));
@@ -170,6 +255,7 @@ public final class OutboxDispatcher implements SmartLifecycle {
 
   @Override
   public synchronized void stop() {
+    stopping = true;
     if (worker == null) return;
     worker.shutdown();
     try {

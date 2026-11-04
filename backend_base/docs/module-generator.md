@@ -519,7 +519,8 @@ Vue 业务页面生成属于后续独立扩展；首版的 Vue 界面是生成�
 ### 消息公共能力
 
 `messaging-v3/envelope-1` 暴露 `MessageCodec`、`MessagePublisher`、`MessageHandler<T>`、
-`ConsumerIdempotency`、`OutboxWriter`。生成模板复用这些 API；不得生成直接 afterCommit 发消息
+`ConsumerIdempotency`、`OutboxWriter`。Outbox 投递器维护批次租约，模板不得以确认等待时间推断端到端发布截止时间。
+生成模板复用这些 API；不得生成直接 afterCommit 发消息
 冒充 Outbox，不得以 V1 Redis 防重代替持久消费幂等。RabbitMQ 4.1 quorum 是唯一 broker 绑定，
 使用 `app.identity` 隔离、显式消费者开关和独立 SQL 迁移位置。
 模板仍须逐项验证本地事务边界、业务幂等、失败重放及外部副作用；公共能力实现不代表通知、订单等模板已实现。
