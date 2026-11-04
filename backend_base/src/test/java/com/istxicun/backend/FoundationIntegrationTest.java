@@ -37,6 +37,9 @@ class FoundationIntegrationTest {
   @Test
   void disabledObservabilityCreatesNoRemoteExporters() {
     org.assertj.core.api.Assertions.assertThat(
+            context.getBeansOfType(io.opentelemetry.sdk.trace.export.BatchSpanProcessor.class))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(
             context.getBeansOfType(io.opentelemetry.sdk.trace.export.SpanExporter.class))
         .isEmpty();
     org.assertj.core.api.Assertions.assertThat(

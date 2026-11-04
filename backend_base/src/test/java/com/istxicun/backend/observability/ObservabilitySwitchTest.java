@@ -23,7 +23,7 @@ class ObservabilitySwitchTest {
                   ObservationAutoConfiguration.class,
                   org.springframework.boot.actuate.autoconfigure.opentelemetry
                       .OpenTelemetryAutoConfiguration.class,
-                  OpenTelemetryTracingAutoConfiguration.class,
+                  NoopTracerAutoConfiguration.class,
                   MicrometerTracingAutoConfiguration.class,
                   PrometheusMetricsExportAutoConfiguration.class))
           .withUserConfiguration(ObservabilityConfiguration.class)
@@ -32,6 +32,17 @@ class ObservabilitySwitchTest {
               "management.otlp.tracing.export.enabled=false",
               "management.otlp.tracing.endpoint=http://127.0.0.1:1/v1/traces",
               "management.prometheus.metrics.export.enabled=false");
+
+  @Test
+  void defaultOffCreatesNoSdkBatchSendingWorker() {
+    runner.run(
+        context -> {
+          assertThat(context)
+              .hasNotFailed()
+              .doesNotHaveBean(io.opentelemetry.sdk.trace.export.BatchSpanProcessor.class);
+          assertThat(context).doesNotHaveBean(SpanExporter.class);
+        });
+  }
 
   @Test
   void prometheusCanRunWithTracingDisabled() {
