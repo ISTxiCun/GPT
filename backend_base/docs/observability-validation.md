@@ -23,7 +23,7 @@ python3 demo/observability/verify.py
 GitHub Actions `observability-checks` 自动运行相同脚本并保存结果工件。
 自建线程不属于 Boot 托管线程池的上下文传播保证。
 
-最终本地 Maven 回归：68 个测试通过；另运行真实 RabbitMQ 的 `MessagingObservabilityIT`，
+最终本地 Maven 回归：69 个测试通过；另运行真实 RabbitMQ 的 `MessagingObservabilityIT`，
 验证传播、延迟重试与在途停机通过。上一轮 Redis/MySQL/MQ 全量集成结果见 V4 主文档；
 新增测试及完整 Compose 验收现已加入 CI，后续提交会重复执行。
 
@@ -61,6 +61,9 @@ MQ 测试使用独立随机命名空间并清理队列；HTTP/MQ 消息体均不
    用 `@AutoConfigureObservability` 明确启用完整观测后，真实发布/消费/重试关系通过。
 5. 严格 umask 导致非 root 容器不能读取公共配置/jar。
    文档及 CI 在启动前明确设置公共只读文件权限。
+6. 即使没有 exporter，Boot 的默认 SDK 配置也可能创建 BatchSpanProcessor 工作线程。
+   将完整 OTel tracing 配置纳入 tracing.enabled 门控；默认关闭时同时断言无
+   exporter、无 BatchSpanProcessor，69 个回归测试通过。
 
 ## 边界
 
