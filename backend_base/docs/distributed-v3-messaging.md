@@ -98,7 +98,12 @@ Outbox 可以在核心发布/消费能力稳定后作为 V3 的独立子交付�
 | outbox.poll-millis / batch-size | 1000 / 10；100～60000 / 1～100 |
 | outbox.lease-millis / max-attempts | 60000 / 10；1000～600000 / 1～100 |
 
-Outbox 租约必须大于 `batch-size * confirm-timeout-millis + 1000`。
+Outbox 租约保留原有最小预算校验：大于 `batch-size * confirm-timeout-millis + 1000`。
+该校验不代表完整发送耗时上限；连接、握手、网络写入和数据库更新均可能额外耗时。
+投递期间按租约约三分之一的间隔，对整个领取批次用原领取令牌续租，覆盖当前发布及排队任务。
+每次发布前再次校验并续租；已过期或已被重新领取的任务不会被旧持有者复活。
+续租失败后停止该批次的后续发布；已经进行中的发送可能结果未知，完成更新仍受领取令牌保护。
+停机、中断或进程退出后停止续租，由租约到期恢复。单独修改确认等待时间不能替代续租机制。
 边界在配置绑定及组件构造时验证，开启所需的表不存在则启动失败。
 只有注册 `MessageHandler<T>` Bean 且 `consumers-enabled=true` 时创建消费线程。
 关闭消费但开启消息时仍声明已注册处理器的持久拓扑，可用于生产者先发布、稍后启动消费。
@@ -203,7 +208,7 @@ app:
 `OutboxDispatcher.purgeSentBefore(before, limit)` 是显式保留操作，只删至少一天前的 SENT，
 每次 1～1000 条。未自动归档正文或清理消费幂等记录；需要审计归档时先导出再清理。
 监控 PENDING/IN_FLIGHT 最老年龄、FAILED 数量、表大小和磁盘空间；
-`distributed.messaging.outbox` 记录 sent/retry/exhausted/stale-claim。
+`distributed.messaging.outbox` 记录 sent/retry/exhausted/stale-claim/lease-lost。
 运维重投 FAILED Outbox 时应停投递器、审核业务幂等与事件内容、记录审计，再按 scope/messageId
 将状态改为 PENDING、attempts=0、claim_token/lease_until 清空、next_attempt=当前时间。
 禁止批量无条件更新整个共享表。关闭/回滚部署前，先排空或暂停并保存未发送事件，
@@ -269,3 +274,7 @@ Outbox 领取者崩溃通过保留未完成领取并将数据库租约置为过�
 真实依赖演示启动及 Outbox notice 消费通过，授权 CLI 空队列审计通过。
 服务验收环境为 RabbitMQ 4.1 与 MySQL 8.0.44；CI 使用 MySQL 8.4，CI 运行结果以 GitHub Actions 为准。
 TLS 使用 JVM 默认信任库并启用主机名校验；本地验收为明文回环连接，未覆盖 TLS 握手及多节点 broker 故障。
+
+续租保证仍依赖调度和数据库可用性：长时间 JVM 暂停、数据库断连或锁等待可能令续租失败，
+此时已开始的发布仍可能重复，消费幂等不可省略。`confirm-timeout-millis` 继续仅表示
+发送返回后的确认等待，不是端到端发送截止时间。续租失败和 lease-lost 必须纳入告警。

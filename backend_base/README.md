@@ -469,6 +469,7 @@ V2～V4 的接口、实施顺序和验收标准记录在[开发路线图](docs/d
 
 [消息接入、迁移、失败恢复与演示](docs/distributed-v3-messaging.md)提供 RabbitMQ 4.1 quorum 队列、
 confirm/return 发布结果、手动 ACK、有界重试、授权审计重放、MySQL 消费幂等与可选 Outbox。
+Outbox 在连接、发送及批次排队期间按领取令牌续租；确认等待时间不是完整发送的耗时上限。
 `app.distributed.messaging.enabled`、`consumers-enabled` 和 `outbox.enabled` 均默认关闭；
 启用 JDBC 能力须显式增加 `classpath:db/messaging` 迁移位置。语义为至少一次，业务负责幂等。
 消费者名称不能以 `.failed` 或 `.retry.<数字>` 结尾，避免与内部队列碰撞。
